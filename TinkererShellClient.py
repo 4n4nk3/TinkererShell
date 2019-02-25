@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """TinkererShell client, a simple client to control bots.\n"""
 
-# Written By Tinkerer: https://github.com/4n4nk3
+# Written By Ananke: https://github.com/4n4nk3
 from socket import *
 import os
 import time
