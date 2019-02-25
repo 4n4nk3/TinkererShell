@@ -1,6 +1,6 @@
 # TinkererShell
 A simple reverse shell written in python just for fun.
-Actually it supports Windows and Linux OS and integrates some basic functionalities like keylogging and sending the collected data via email.
+Actually it supports Windows and Linux OS and integrates some basic functionalities like keylogging, sending collected data via email and AES encrypted communications.
 
 > Work in progress... stay tuned!
 
