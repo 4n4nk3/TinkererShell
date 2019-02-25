@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
-# Written By Tinkerer: https://github.com/4n4nk3
+# Written By Ananke: https://github.com/4n4nk3
 import base64
 import os
 import random
