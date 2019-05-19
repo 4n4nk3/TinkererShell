@@ -256,10 +256,10 @@ def quit_utility() -> bool:
             sender('SHquit')
             response = receiver()
             if response == 'mistochiudendo':
-                return True
+                pass
             else:
                 logging(data_to_log=response, printer=True)
-                return False
+        return True
     else:
         logging(data_to_log='Operation aborted\n', printer=True)
         return False
