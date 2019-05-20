@@ -24,7 +24,7 @@ Actually it supports Windows and Linux OS and integrates some basic functionalit
  
 #### TODO:
 
-
+* Switch from pycrypto to pycryptodome.
 * Modify the bots to keep trying to reconnect to master even if the connection has been terminated by the master.
 * Split source in modules.
 * Thoroughly test persistence function on Linux.
