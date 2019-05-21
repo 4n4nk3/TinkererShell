@@ -24,16 +24,14 @@ Actually it supports Windows and Linux OS and integrates some basic functionalit
  
 #### TODO:
 
-* Modify the bots to keep trying to reconnect to master even if the connection has been terminated by the master.
+* Add function to kill a single bot
 * Split source in modules.
 * Thoroughly test persistence function on Linux.
 * Thoroughly test persistence function on Windows.
-* Configure/Enable/Disable mail activation from shell cmd.
 * Add clipboard monitoring and clipboard content capturing.
 * Add active window recognition.
 * Add screenshooter.
 * Add webcam and microphone recording (ideally streaming from bot and saving locally to master).
-* Exit master cleanly after closing all connections.
 
 
 
