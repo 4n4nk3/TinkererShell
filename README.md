@@ -9,17 +9,16 @@ Actually it supports Windows and Linux OS and integrates some basic functionalit
  - [ ] OSX
 
 ### Functions and characteristics:
- - [x] Reverse connection
- - [x] AES encrypted communications
- - [x] Multithreaded
- - [x] Support multiple bots connected at the same time
- - [x] Keylogger
- - [x] Possibility to send keylogged data periodically via email
- - [x] Possibility to enable or disable persistence (before payload delivery or later via remote control)
- - [x] Possibility to enable or disable keylogger (before payload delivery or later via remote control)
- - [x] Simple DNS spoofer (via hosts file)
- - [x] Capability to upload and download files to and from the bot
- 
+ - [x] Reverse connection.
+ - [x] AES encrypted communications.
+ - [x] Multithreaded.
+ - [x] Support multiple bots connected at the same time.
+ - [x] Keylogger.
+ - [x] Possibility to enable or disable persistence (before payload delivery or later via remote control).
+ - [x] Possibility to enable or disable keylogger (before payload delivery or later via remote control).
+ - [x] Simple DNS spoofer (via hosts file).
+ - [x] Capability to upload and download files to and from the bot.<br/><br/><br/>
+
  > Work in progress... stay tuned!
  
 #### TODO:
