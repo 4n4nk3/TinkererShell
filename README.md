@@ -23,7 +23,6 @@ Actually it supports Windows and Linux OS and integrates some basic features lik
  
 #### TODO:
 
-* Add function to kill a single bot
 * Split source in modules.
 * Thoroughly test persistence function on Linux.
 * Thoroughly test persistence function on Windows.

