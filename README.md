@@ -1,5 +1,5 @@
 # TinkererShell
-A simple reverse shell written in python just for fun.
+A simple reverse shell written in python 3.7 just for fun.
 Actually it supports Windows and Linux OS and integrates some basic features like keylogging and AES encrypted communications.
 
 

