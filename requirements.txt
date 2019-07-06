@@ -1,3 +1,4 @@
-pycryptodome==3.8.1
-pyxhook==1.0.0
-tendo==0.2.12
+pyscreenshot
+pycryptodome
+pyxhook
+tendo
