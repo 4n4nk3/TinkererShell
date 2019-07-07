@@ -1,4 +1,5 @@
 # Written By Ananke: https://github.com/4n4nk3
+import datetime
 
 def logging(data_to_log: str, printer=False) -> bool:
     """Log data passed as argument and if needed print it also to the console.\n"""

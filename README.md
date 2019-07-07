@@ -24,7 +24,6 @@ Actually it supports Windows and Linux OS and integrates some basic features lik
  
 #### TODO:
 
-* Split source in modules.
 * Thoroughly test persistence function on Linux.
 * Thoroughly test persistence function on Windows.
 * Add clipboard monitoring and clipboard content capturing.

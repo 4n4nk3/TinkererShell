@@ -208,8 +208,13 @@ def screenshot() -> bool:
     sender('SHscreenshot')
     received_file_data = b64decode(receiver())
     if received_file_data != 'reachedexcept':
-        # Local filename to save downloaded file
-        local_filename = ask_input(phrase='Insert name which you want to use to save the file\t\texample.png\n\n >>> ')
+        counter = 0
+        print(connected_sockets[active_bot])
+        while True:
+            local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'], connected_sockets[active_bot]['username'], str(counter))
+            if not os.path.isfile(local_filename):
+                break
+            counter += 1
         try:
             downloaded_file_descriptor = open(local_filename, 'wb')
             downloaded_file_descriptor.write(received_file_data)
