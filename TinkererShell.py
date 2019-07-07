@@ -3,11 +3,12 @@
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import os
+import sys
+sys.path.append('./modules/')
 import shutil
 import socket
 import subprocess
-import sys
+import os
 import tempfile
 import threading
 from time import sleep

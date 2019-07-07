@@ -3,10 +3,11 @@
 """TinkererShell master, a simple bots manager.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import cmd
+import sys
+sys.path.append('./modules/')
 import datetime
 import os
-import sys
+import cmd
 import threading
 from time import sleep
 from base64 import b64decode
@@ -340,14 +341,14 @@ class BotSwitcher(cmd.Cmd):
     # ---------------------------------------------------------------------------------------------
     def do_SHbots(self, option):
         """SHbots\n\tList connected bots.\n"""
-        active_bots = '\nActive bots:'
-        inactive_bots = '\n\nInactive bots:'
+        active_bots_str = '\nActive bots:'
+        inactive_bots_str = '\n\nInactive bots:'
         for bots_counter, bot in enumerate(connected_sockets):
             if bot['status'] is True:
-                active_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+                active_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
             else:
-                inactive_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
-        printable_bots = active_bots + inactive_bots
+                inactive_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+        printable_bots = active_bots_str + inactive_bots_str
         logging(data_to_log=printable_bots, printer=True)
 
     # ---------------------------------------------------------------------------------------------
