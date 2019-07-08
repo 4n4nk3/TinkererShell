@@ -16,6 +16,7 @@ Actually it supports Windows and Linux OS and integrates some basic features lik
  - [x] Keylogger.
  - [x] Possibility to take screenshots of bot's monitors.
  - [x] Possibility to take pictures using bot's webcam.
+ - [x] Possibility to steal bot's clipboard's content.
  - [x] Possibility to enable or disable persistence (before payload delivery or later via remote control).
  - [x] Possibility to enable or disable keylogger (before payload delivery or later via remote control).
  - [x] Simple DNS spoofer (via hosts file).
@@ -27,8 +28,6 @@ Actually it supports Windows and Linux OS and integrates some basic features lik
 
 * Thoroughly test persistence function on Linux.
 * Thoroughly test persistence function on Windows.
-* Add clipboard monitoring and clipboard content capturing.
-* Add active window recognition.
 * Add webcam stream and microphone recording (ideally streaming from bot and saving locally to master).
 
 

