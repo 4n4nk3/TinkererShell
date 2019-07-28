@@ -399,11 +399,11 @@ class BotSwitcher(cmd.Cmd):
                 logging(data_to_log=printable_bots, printer=True)
             elif option.isdigit() is True:
                 try:
-                    if connected_sockets[int(command)]['status'] is True:
+                    if connected_sockets[int(option)]['status'] is True:
                         double_check = ask_input(phrase='Are you sure? yes/no\n')
                         if double_check == 'yes':
-                            active_bot = int(command)
-                            conn = connected_sockets[int(command)]['conn']
+                            active_bot = int(option)
+                            conn = connected_sockets[int(option)]['conn']
                             tinkerer_menu()
                         else:
                             logging(data_to_log='Selection canceled\n', printer=True)
