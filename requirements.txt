@@ -1,3 +1,7 @@
-pycryptodome==3.8.1
-pyxhook==1.0.0
-tendo==0.2.12
+Pillow
+pyperclip
+opencv-python
+pyscreenshot
+pycryptodome
+pyxhook
+tendo

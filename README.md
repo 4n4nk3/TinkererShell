@@ -1,6 +1,6 @@
 # TinkererShell
-A simple reverse shell written in python just for fun.
-Actually it supports Windows and Linux OS and integrates some basic functionalities like keylogging, sending collected data via email and AES encrypted communications.
+A simple reverse shell written in python 3.7 just for fun.
+Actually it supports Windows and Linux OS and integrates some basic features like keylogging and AES encrypted communications.
 
 
 ### Supported operating systems:
@@ -14,6 +14,9 @@ Actually it supports Windows and Linux OS and integrates some basic functionalit
  - [x] Multithreaded.
  - [x] Support multiple bots connected at the same time.
  - [x] Keylogger.
+ - [x] Possibility to take screenshots of bot's monitors.
+ - [x] Possibility to take pictures using bot's webcam.
+ - [x] Possibility to steal bot's clipboard's content.
  - [x] Possibility to enable or disable persistence (before payload delivery or later via remote control).
  - [x] Possibility to enable or disable keylogger (before payload delivery or later via remote control).
  - [x] Simple DNS spoofer (via hosts file).
@@ -23,14 +26,9 @@ Actually it supports Windows and Linux OS and integrates some basic functionalit
  
 #### TODO:
 
-* Add function to kill a single bot
-* Split source in modules.
 * Thoroughly test persistence function on Linux.
 * Thoroughly test persistence function on Windows.
-* Add clipboard monitoring and clipboard content capturing.
-* Add active window recognition.
-* Add screenshooter.
-* Add webcam and microphone recording (ideally streaming from bot and saving locally to master).
+* Add webcam stream and microphone recording (ideally streaming from bot and saving locally to master).
 
 
 

